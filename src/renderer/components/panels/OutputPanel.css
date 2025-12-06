@@ -1,0 +1,136 @@
+.output-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+.output-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid #2d2d30;
+  background: #252526;
+}
+
+.output-channels {
+  display: flex;
+  align-items: center;
+}
+
+.channel-select {
+  background: #3c3c3c;
+  color: #d4d4d4;
+  border: 1px solid #3c3c3c;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+}
+
+.channel-select:hover {
+  background: #4e4e4e;
+}
+
+.channel-select:focus {
+  border-color: #007acc;
+}
+
+.output-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.icon-button {
+  background: transparent;
+  border: none;
+  color: #d4d4d4;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button:hover {
+  background: #3c3c3c;
+}
+
+.icon-button.active {
+  background: #007acc;
+}
+
+.output-content {
+  flex: 1;
+  overflow-y: auto;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 8px;
+}
+
+.empty-output {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #858585;
+  text-align: center;
+}
+
+.empty-output p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.empty-output small {
+  font-size: 12px;
+}
+
+.output-logs {
+  display: flex;
+  flex-direction: column;
+}
+
+.output-line {
+  padding: 2px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-time {
+  color: #858585;
+  margin-right: 8px;
+}
+
+.log-channel {
+  color: #569cd6;
+  margin-right: 8px;
+  font-weight: 500;
+}
+
+.log-message {
+  color: #d4d4d4;
+}
+
+.log-error .log-message {
+  color: #f48771;
+}
+
+.log-warning .log-message {
+  color: #cca700;
+}
+
+.log-success .log-message {
+  color: #89d185;
+}
+
+.log-info .log-message {
+  color: #d4d4d4;
+}

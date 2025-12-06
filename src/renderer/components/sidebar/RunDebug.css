@@ -1,0 +1,176 @@
+.run-debug {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--vscode-sidebar-bg);
+  color: var(--vscode-fg);
+}
+
+.run-debug-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vscode-border);
+}
+
+.run-debug-header h3 {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin: 0;
+  opacity: 0.7;
+}
+
+.run-debug-content {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.run-debug-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.run-debug-empty p {
+  font-size: 13px;
+  opacity: 0.7;
+  margin-bottom: 16px;
+}
+
+.run-debug-reload {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--vscode-button-bg);
+  color: var(--vscode-button-fg);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.run-debug-reload:hover {
+  background: var(--vscode-button-hover);
+}
+
+.run-debug-config {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.config-select {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--vscode-input-bg);
+  border: 1px solid var(--vscode-border);
+  color: var(--vscode-fg);
+  font-size: 13px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.config-select:focus {
+  outline: none;
+  border-color: var(--vscode-focus);
+}
+
+.run-debug-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  background: var(--vscode-input-bg);
+  border: 1px solid var(--vscode-border);
+  color: var(--vscode-fg);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.run-debug-settings:hover {
+  background: var(--vscode-hover);
+}
+
+.run-debug-actions {
+  margin-bottom: 20px;
+}
+
+.run-button,
+.stop-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.run-button {
+  background: var(--vscode-button-bg);
+  color: var(--vscode-button-fg);
+}
+
+.run-button:hover:not(:disabled) {
+  background: var(--vscode-button-hover);
+}
+
+.run-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stop-button {
+  background: #d73a49;
+  color: white;
+}
+
+.stop-button:hover {
+  background: #cb2431;
+}
+
+.run-debug-info {
+  padding: 16px;
+  background: var(--vscode-editor-bg);
+  border: 1px solid var(--vscode-border);
+  border-radius: 3px;
+}
+
+.run-debug-info h4 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  opacity: 0.8;
+}
+
+.config-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-item {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.config-label {
+  font-weight: 500;
+  opacity: 0.7;
+  min-width: 70px;
+}
+
+.config-value {
+  opacity: 0.9;
+  word-break: break-all;
+}

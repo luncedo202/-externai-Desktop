@@ -1,0 +1,30 @@
+.status-bar {
+  height: 24px;
+  background: var(--vscode-statusbar-bg);
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 0 6px;
+  height: 100%;
+}
+
+.status-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
