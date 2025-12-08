@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader, FiRefreshCw } from 'react-icons/fi';
+import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader } from 'react-icons/fi';
 import ClaudeService from '../services/ClaudeService';
 import './AIAssistant.css';
 
@@ -19,7 +19,7 @@ function AIAssistant({ onClose, workspaceFolder, onFileCreated }) {
   // Load messages from localStorage if available, but reset if workspaceFolder changes
   const defaultWelcome = {
     role: 'assistant',
-    content: 'Hello! I\'m your AI coding assistant.\n\nBefore I can create files or run commands, please open a workspace folder so I can access your project files and safely make changes.\n\nHow to open a folder:\n1. Click File → Open Folder in the top menu\n2. Or use one of the Welcome buttons (Website Project, Mobile App Project, Game Project) to choose a folder location\n\nOnce a folder is open I can:\n• Create complete, working code for websites, mobile apps, and games\n• Debug and fix errors with clear explanations\n• Explain code and implementation details in simple terms\n• Run terminal commands automatically (e.g. npm install, npm run dev)\n\nIf you\'d like, click one of the project buttons to select a folder now, or tell me what you want to build and I\'ll guide you through the next steps.',
+    content: 'Hello! I\'m your AI coding assistant powered by Claude 4.5.\n\nI\'m here to help you build software. I can:\n\n• Create complete, working code for websites, mobile apps, and games\n• Debug and fix errors with clear explanations\n• Explain code in simple, beginner-friendly terms\n• Build full project structures ready to deploy\n• Understand your entire project - I can see all your files\n• Run terminal commands automatically\n\nJust tell me what you want to build:\n- "Create a landing page for my startup"\n- "Build a contact form with email validation"\n- "Make a simple game"\n- "Add a login page to my website"\n\nI\'ll immediately create the files and run any necessary commands. No manual steps required.\n\nWhat would you like to build?',
   };
   
   const [messages, setMessages] = useState(() => {
@@ -305,61 +305,11 @@ function AIAssistant({ onClose, workspaceFolder, onFileCreated }) {
       console.error('AI Error:', error);
       setError(error.message);
       setMessages(prev => prev.filter(msg => msg.id !== streamingMessageId));
-      
-      // Determine error type for better messaging
-      const isNetworkError = error.message.includes('socket hang up') || 
-                            error.message.includes('ECONNREFUSED') || 
-                            error.message.includes('fetch failed');
-      const isRateLimitError = error.message.includes('rate_limit_error') || 
-                              error.message.includes('429');
-      const isAuthError = error.message.includes('401') || 
-                         error.message.includes('authentication');
-      
-      let errorTitle = '⚠️ Connection Error';
-      let errorDetails = '';
-      let suggestions = [];
-      
-      if (isNetworkError) {
-        errorTitle = '🔌 Network Connection Failed';
-        errorDetails = 'Unable to reach the AI service. The connection was interrupted.';
-        suggestions = [
-          'Check your internet connection',
-          'Verify the AI service is accessible',
-          'Try again in a moment'
-        ];
-      } else if (isRateLimitError) {
-        errorTitle = '⏱️ Rate Limit Reached';
-        errorDetails = 'Too many requests sent to the AI service.';
-        suggestions = [
-          'Wait a minute before trying again',
-          'Consider upgrading your API plan for higher limits'
-        ];
-      } else if (isAuthError) {
-        errorTitle = '🔑 Authentication Error';
-        errorDetails = 'Invalid or missing API credentials.';
-        suggestions = [
-          'Check your API key in the .env file',
-          'Verify your API key is active',
-          'Restart the application after updating credentials'
-        ];
-      } else {
-        errorTitle = '❌ AI Service Error';
-        errorDetails = error.message;
-        suggestions = [
-          'Check your API configuration',
-          'Verify you have API credits available',
-          'Try asking your question again'
-        ];
-      }
-      
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: `${errorTitle}\n\n**${errorDetails}**\n\n**What you can try:**\n${suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n')}`,
-          isError: true,
-          canRetry: true,
-          originalUserMessage: userMessage
+          content: `❌ **Error:** ${error.message}\n\nPlease check:\n1. Your OpenAI API key is correctly set in .env\n2. You have API credits available\n3. Your internet connection is working\n\nTry asking your question again!`
         }
       ]);
     } finally {
@@ -657,7 +607,7 @@ Could you provide more details about what you'd like to build?`;
           await window.electronAPI.terminalWrite(terminalId, '\r\n\x1b[31m●\x1b[0m Command failed: ' + (result.error || result.stderr || 'Unknown error') + '\r\n');
         }
         
-        // Update message with success/failure indicator (status only, not error details)
+        // Update message with success/failure indicator
         setMessages(prev => prev.map(msg => {
           if (msg.id === commandId) {
             if (result.success) {
@@ -669,7 +619,7 @@ Could you provide more details about what you'd like to build?`;
             } else {
               return {
                 ...msg,
-                content: `🔴 Command failed:\n\`\`\`bash\n${command}\n\`\`\``,
+                content: `🔴 Command failed:\n\`\`\`bash\n${command}\n\`\`\`\n\nError: ${result.error || result.stderr || 'Unknown error'}`,
                 commandStatus: 'failed',
                 isError: true
               };
@@ -881,13 +831,11 @@ I will automatically execute everything you provide. Just give me the fix NOW.`
         }
       } catch (error) {
         console.error('Error executing command:', error);
-        // Write error to terminal instead of chat
-        await window.electronAPI.terminalWrite(terminalId, '\r\n\x1b[31m●\x1b[0m Error: ' + error.message + '\r\n');
         setMessages(prev => prev.map(msg => {
           if (msg.id === commandId) {
             return {
               ...msg,
-              content: `🔴 Failed to execute command:\n\`\`\`bash\n${command}\n\`\`\``,
+              content: `🔴 Failed to execute command:\n\`\`\`bash\n${command}\n\`\`\`\n\nError: ${error.message}`,
               commandStatus: 'failed',
               isError: true
             };
@@ -1166,12 +1114,15 @@ I will automatically execute everything you provide. Just give me the fix NOW.`
         if (supervision.analysis.shouldPauseChatAI && supervision.analysis.errorDetails) {
           console.log('⚠️ Supervisor AI pausing workflow due to error');
           
-          // Log error to console and terminal instead of adding to chat
-          console.error('Error detected:', supervision.analysis.errorDetails);
-          await window.electronAPI.terminalWrite(
-            terminalId, 
-            '\r\n\x1b[33m⚠\x1b[0m Error Detected: ' + supervision.analysis.errorDetails.context + '\r\n'
-          );
+          // Add error context message for Chat AI
+          setMessages(prev => [
+            ...prev,
+            {
+              role: 'system',
+              content: `Error Detected:\n\n${supervision.analysis.errorDetails.context}\n\nSuggested fix: ${supervision.analysis.errorDetails.suggestedFix}`,
+              isError: true
+            }
+          ]);
           
           // Stop further execution
           break;
@@ -1183,13 +1134,11 @@ I will automatically execute everything you provide. Just give me the fix NOW.`
         }
       } catch (error) {
         console.error('❌ Error executing command:', error);
-        // Write error to terminal
-        await window.electronAPI.terminalWrite(terminalId, '\r\n\x1b[31m●\x1b[0m Error: ' + error.message + '\r\n');
         setMessages(prev => prev.map(msg => {
           if (msg.id === commandId) {
             return {
               ...msg,
-              content: `Failed: ${cmdSpec.command}`,
+              content: `Error: ${error.message}`,
               isExecuting: false,
               isError: true
             };
@@ -1493,6 +1442,7 @@ I will automatically execute everything you provide. Just give me the fix NOW.`
       <div className="ai-header">
         <div className="ai-header-content">
           <h3>AI Assistant</h3>
+          <span className="ai-model-badge">Claude Sonnet 4.5</span>
         </div>
         <button className="ai-close" onClick={onClose}>
           <FiX size={18} />
@@ -1686,26 +1636,6 @@ I will automatically execute everything you provide. Just give me the fix NOW.`
                 });
               })()}
               </div>
-              {msg.canRetry && msg.originalUserMessage && (
-                <div className="message-retry-section">
-                  <button 
-                    className="retry-button"
-                    onClick={() => {
-                      // Remove the error message and retry
-                      setMessages(prev => prev.filter((_, i) => i !== idx));
-                      setInput(msg.originalUserMessage);
-                      // Trigger send
-                      setTimeout(() => {
-                        handleSendMessage(msg.originalUserMessage);
-                      }, 100);
-                    }}
-                    disabled={isLoading}
-                  >
-                    <FiRefreshCw size={14} />
-                    Retry Request
-                  </button>
-                </div>
-              )}
             </div>
           );
         })}

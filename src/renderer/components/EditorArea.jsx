@@ -8,26 +8,6 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
   const [previewUrl, setPreviewUrl] = useState('http://localhost:3000');
   const currentFile = openFiles.find((f) => f.id === activeFile);
 
-  // Debug logging
-  React.useEffect(() => {
-    console.log('🎨 EditorArea render:', {
-      openFilesCount: openFiles.length,
-      activeFile,
-      currentFile: currentFile ? {
-        id: currentFile.id,
-        name: currentFile.name,
-        contentLength: currentFile.content?.length,
-        contentPreview: currentFile.content?.substring(0, 50),
-        language: currentFile.language,
-        hasContent: !!currentFile.content
-      } : null
-    });
-    
-    if (currentFile && !currentFile.content) {
-      console.error('⚠️ WARNING: currentFile has no content!', currentFile);
-    }
-  }, [openFiles, activeFile, currentFile]);
-
   const handleEditorChange = (value) => {
     if (currentFile) {
       onContentChange(currentFile.id, value);
@@ -93,17 +73,11 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
       <div className="editor-content" style={{ display: 'flex' }}>
         {!showPreview && currentFile ? (
           <Editor
-            key={currentFile.id}
             height="100%"
             language={currentFile.language}
-            value={currentFile.content || ''}
+            value={currentFile.content}
             onChange={handleEditorChange}
             theme="vs-dark"
-            loading={<div style={{ padding: '20px', color: '#fff' }}>Loading editor...</div>}
-            onMount={(editor, monaco) => {
-              console.log('🎯 Monaco Editor mounted for file:', currentFile.name);
-              console.log('📝 Editor content length:', editor.getValue().length);
-            }}
             options={{
               fontSize: 14,
               fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",

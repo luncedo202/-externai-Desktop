@@ -87,75 +87,9 @@ function App() {
     }
   };
   
-  // Handler for AI-created files - opens in editor and refreshes explorer
+  // Handler for AI-created files - refreshes explorer without opening
   const handleFileCreatedByAI = async (filePath) => {
-    console.log('🔄 File created by AI, opening in editor:', filePath);
-    
-    // Add small delay to ensure file is fully written
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-    // Read the file content
-    const result = await window.electronAPI.fs.readFile(filePath);
-    console.log('📄 File read result:', { 
-      success: result.success, 
-      contentLength: result.content?.length, 
-      contentType: typeof result.content,
-      filePath 
-    });
-    
-    if (result.success) {
-      const fileName = filePath.split('/').pop();
-      const extension = fileName.split('.').pop();
-      
-      // Check if file is already open
-      const existingFile = openFiles.find(f => f.id === filePath);
-      
-      if (existingFile) {
-        // File already open, just update content and make it active
-        console.log('♻️ Updating existing file tab');
-        setOpenFiles(prev => prev.map(f => 
-          f.id === filePath 
-            ? { ...f, content: result.content, isDirty: false }
-            : f
-        ));
-        setActiveFile(filePath);
-      } else {
-        // Open new file
-        console.log('✨ Creating new file tab');
-        const newFile = {
-          id: filePath,
-          name: fileName,
-          path: filePath,
-          content: result.content,
-          isDirty: false,
-          language: getLanguageFromExtension(extension),
-        };
-        console.log('📋 New file object:', { 
-          id: newFile.id, 
-          name: newFile.name, 
-          contentLength: newFile.content?.length,
-          contentType: typeof newFile.content,
-          language: newFile.language,
-          contentPreview: newFile.content?.substring(0, 100)
-        });
-        
-        // Add file to openFiles and set as active in one state update
-        setOpenFiles(prevFiles => {
-          const updated = [...prevFiles, newFile];
-          console.log('📁 Updated openFiles array:', updated.map(f => ({ name: f.name, hasContent: !!f.content, contentLength: f.content?.length })));
-          return updated;
-        });
-        
-        // Set active file after a small delay to ensure state is updated
-        setTimeout(() => {
-          console.log('🎯 Setting active file:', filePath);
-          setActiveFile(filePath);
-        }, 50);
-      }
-    } else {
-      console.error('❌ Failed to read file:', result.error);
-    }
-    
+    console.log('🔄 File created by AI, refreshing explorer:', filePath);
     // Always refresh explorer when AI creates files
     setExplorerRefreshTrigger(prev => prev + 1);
   };

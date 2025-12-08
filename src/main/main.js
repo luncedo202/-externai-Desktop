@@ -1,4 +1,5 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 require('./ClaudeProxy');
 const path = require('path');
 const fs = require('fs').promises;
@@ -35,7 +36,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false,
     },
-    icon: path.join(__dirname, '../../assets/externai-logo.png'),
+    icon: path.join(__dirname, '../../assets/icon.png'),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 10, y: 10 },
   });
@@ -47,11 +48,11 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': isDev ? [
-          // Development: Allow Vite HMR, Monaco CDN, and inline scripts
-          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:*; worker-src 'self' blob: https://cdn.jsdelivr.net;"
+          // Development: Allow Vite HMR and inline scripts
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:*;"
         ] : [
-          // Production: Strict CSP with Monaco CDN
-          "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob: https://cdn.jsdelivr.net;"
+          // Production: Strict CSP
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.anthropic.com;"
         ]
       }
     });
@@ -1018,7 +1019,76 @@ ipcMain.handle('images:search', async (event, query) => {
   }
 });
 
-app.whenReady().then(createWindow);
+// Auto-updater configuration
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on('checking-for-update', () => {
+  console.log('🔍 Checking for updates...');
+});
+
+autoUpdater.on('update-available', (info) => {
+  console.log('✅ Update available:', info.version);
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Update Available',
+    message: `A new version (${info.version}) is available!`,
+    buttons: ['Download Now', 'Later'],
+    defaultId: 0
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.downloadUpdate();
+      mainWindow.webContents.send('update-downloading');
+    }
+  });
+});
+
+autoUpdater.on('update-not-available', () => {
+  console.log('✅ App is up to date');
+});
+
+autoUpdater.on('download-progress', (progress) => {
+  console.log(`📥 Download progress: ${Math.round(progress.percent)}%`);
+  mainWindow.webContents.send('update-progress', progress);
+});
+
+autoUpdater.on('update-downloaded', () => {
+  console.log('✅ Update downloaded');
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Update Ready',
+    message: 'Update downloaded. Restart now to install?',
+    buttons: ['Restart Now', 'Later'],
+    defaultId: 0
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall();
+    }
+  });
+});
+
+autoUpdater.on('error', (error) => {
+  console.error('❌ Auto-updater error:', error);
+});
+
+// Check for updates on app start (only in production)
+app.whenReady().then(() => {
+  createWindow();
+  
+  if (!app.isPackaged) {
+    console.log('📦 Development mode - skipping auto-update check');
+  } else {
+    // Check for updates after 3 seconds
+    setTimeout(() => {
+      autoUpdater.checkForUpdates();
+    }, 3000);
+    
+    // Check for updates every 4 hours
+    setInterval(() => {
+      autoUpdater.checkForUpdates();
+    }, 4 * 60 * 60 * 1000);
+  }
+});
 
 app.on('window-all-closed', () => {
   // Clean up terminals and watchers

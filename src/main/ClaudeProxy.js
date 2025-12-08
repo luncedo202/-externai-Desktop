@@ -4,43 +4,28 @@ const { ipcMain } = require('electron');
 const fetch = require('node-fetch');
 require('dotenv').config();
 
-// Use proxy server instead of calling API directly
-// This keeps the API key secure on the backend server
-const PROXY_SERVER_URL = process.env.PROXY_SERVER_URL || 'https://your-app.up.railway.app';
-const CLAUDE_API_URL = `${PROXY_SERVER_URL}/api/claude`;
-
-// Fallback to direct API if proxy server URL not set (for development)
-const USE_PROXY = !process.env.ANTHROPIC_API_KEY;
-const DIRECT_API_URL = 'https://api.anthropic.com/v1/messages';
+const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 const CLAUDE_API_KEY = process.env.VITE_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+
+console.log('[ClaudeProxy] Initialized. API Key present:', !!CLAUDE_API_KEY);
 
 // Streaming API handler
 ipcMain.handle('claude:stream', async (event, { prompt, maxTokens }) => {
-  // If using proxy server, check if it's configured
-  if (USE_PROXY && PROXY_SERVER_URL.includes('your-app')) {
-    return { success: false, error: 'Proxy server not configured. Please set PROXY_SERVER_URL in .env file.' };
-  }
-  
-  // If using direct API, check for key
-  if (!USE_PROXY && !CLAUDE_API_KEY) {
-    return { success: false, error: 'Missing Anthropic API key' };
+  if (!CLAUDE_API_KEY) {
+    console.error('[ClaudeProxy] Missing API key. VITE_ANTHROPIC_API_KEY:', !!process.env.VITE_ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY:', !!process.env.ANTHROPIC_API_KEY);
+    return { success: false, error: 'Missing Anthropic API key. Please check your .env file.' };
   }
   
   const streamId = `stream_${Date.now()}`;
-  const apiUrl = USE_PROXY ? CLAUDE_API_URL : DIRECT_API_URL;
-  
-  const requestHeaders = USE_PROXY ? {
-    'content-type': 'application/json',
-  } : {
-    'x-api-key': CLAUDE_API_KEY,
-    'anthropic-version': '2023-06-01',
-    'content-type': 'application/json',
-  };
   
   try {
-    const response = await fetch(apiUrl, {
+    const response = await fetch(CLAUDE_API_URL, {
       method: 'POST',
-      headers: requestHeaders,
+      headers: {
+        'x-api-key': CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: maxTokens || 20000,
@@ -174,7 +159,10 @@ EVERY response MUST end with:
 Ready for next step? Reply 'continue' or give new instructions.
 
 ---`,
-        messages: prompt
+        messages: Array.isArray(prompt) ? prompt : [{ 
+          role: 'user', 
+          content: [{ type: 'text', text: prompt }]
+        }]
       }),
     });
 
@@ -323,10 +311,10 @@ DO NOT skip the Summary and Next Steps sections. They are MANDATORY for every re
 If you don't include them, the response is incomplete and unusable.
 
 You are not a helper or assistant - you are the engineer who BUILDS the solution.`,
-        messages: [
+        messages: Array.isArray(prompt) ? prompt : [
           {
             role: 'user',
-            content: prompt
+            content: [{ type: 'text', text: prompt }]
           }
         ]
       })

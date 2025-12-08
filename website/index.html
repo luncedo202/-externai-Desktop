@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExternAI - AI-Powered IDE for Developers</title>
+    <meta name="description" content="Build software faster with AI. ExternAI is an intelligent development environment powered by Claude 4.5.">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 60px 20px 40px;
+        }
+
+        .logo {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, #fff, #e0e0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tagline {
+            font-size: 24px;
+            margin-bottom: 15px;
+            opacity: 0.95;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            opacity: 0.85;
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+
+        .download-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 50px 40px;
+            text-align: center;
+            margin: 40px auto;
+            max-width: 700px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: #fff;
+            color: #667eea;
+            padding: 18px 40px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-size: 20px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .download-icon {
+            width: 24px;
+            height: 24px;
+        }
+
+        .version-info {
+            margin-top: 20px;
+            opacity: 0.8;
+            font-size: 14px;
+        }
+
+        .other-platforms {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .other-platforms h3 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            opacity: 0.9;
+        }
+
+        .platform-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .platform-link {
+            color: #fff;
+            text-decoration: none;
+            padding: 10px 20px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .platform-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            margin: 60px 0;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .feature-icon {
+            font-size: 40px;
+            margin-bottom: 15px;
+        }
+
+        .feature-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .feature-desc {
+            opacity: 0.85;
+            font-size: 15px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            opacity: 0.8;
+            font-size: 14px;
+        }
+
+        .github-link {
+            color: #fff;
+            margin-left: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .logo {
+                font-size: 36px;
+            }
+
+            .tagline {
+                font-size: 20px;
+            }
+
+            .download-section {
+                padding: 30px 20px;
+            }
+
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">⚡ ExternAI</div>
+            <div class="tagline">Build Software Faster with AI</div>
+            <div class="subtitle">An intelligent development environment powered by Claude 4.5. Code, debug, and deploy with AI assistance.</div>
+        </header>
+
+        <div class="download-section">
+            <a href="#" id="download-btn" class="download-btn">
+                <svg class="download-icon" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm-2-8l2 2 2-2m-2 2V6"></path>
+                </svg>
+                <span id="download-text">Download for...</span>
+            </a>
+            <div class="version-info">Latest Version: <span id="version">1.0.0</span></div>
+
+            <div class="other-platforms">
+                <h3>Other Platforms</h3>
+                <div class="platform-links">
+                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-x64.dmg" class="platform-link">macOS (Intel)</a>
+                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-arm64.dmg" class="platform-link">macOS (Apple Silicon)</a>
+                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-Setup.exe" class="platform-link">Windows</a>
+                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI.AppImage" class="platform-link">Linux AppImage</a>
+                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/externai_amd64.deb" class="platform-link">Linux .deb</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <div class="feature-title">AI-Powered Coding</div>
+                <div class="feature-desc">Get intelligent code suggestions, explanations, and complete implementations from Claude 4.5.</div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <div class="feature-title">Lightning Fast</div>
+                <div class="feature-desc">Built on Electron with Monaco Editor. Fast, responsive, and reliable.</div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <div class="feature-title">Full-Stack Support</div>
+                <div class="feature-desc">Build web apps, mobile apps, games, and backends with AI assistance every step of the way.</div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔧</div>
+                <div class="feature-title">Integrated Terminal</div>
+                <div class="feature-desc">Run commands, install packages, and manage your project without leaving the IDE.</div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎨</div>
+                <div class="feature-title">Modern UI</div>
+                <div class="feature-desc">Clean, intuitive interface designed for productivity. Dark mode included.</div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔄</div>
+                <div class="feature-title">Auto-Updates</div>
+                <div class="feature-desc">Always get the latest features and improvements automatically.</div>
+            </div>
+        </div>
+
+        <footer>
+            © 2025 ExternAI. Built by Sonelise Pakade.
+            <a href="https://github.com/luncedo202/-externai-Desktop" class="github-link" target="_blank">GitHub</a>
+        </footer>
+    </div>
+
+    <script>
+        // Detect OS and set appropriate download link
+        function detectOS() {
+            const userAgent = window.navigator.userAgent;
+            const platform = window.navigator.platform;
+            const macosPlatforms = ['Macintosh', 'MacIntel', 'MacPPC', 'Mac68K'];
+            const windowsPlatforms = ['Win32', 'Win64', 'Windows', 'WinCE'];
+            const iosPlatforms = ['iPhone', 'iPad', 'iPod'];
+
+            let os = null;
+            let downloadUrl = '';
+            let downloadText = '';
+
+            if (macosPlatforms.indexOf(platform) !== -1) {
+                // Check if Apple Silicon or Intel
+                const isAppleSilicon = /Mac OS X 10_15|Mac OS X 11|Mac OS X 12|Mac OS X 13|Mac OS X 14/.test(userAgent) && /arm64|aarch64/.test(userAgent);
+                os = 'macOS';
+                if (isAppleSilicon || /M1|M2|M3/.test(userAgent)) {
+                    downloadUrl = 'https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-arm64.dmg';
+                    downloadText = 'Download for macOS (Apple Silicon)';
+                } else {
+                    downloadUrl = 'https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-x64.dmg';
+                    downloadText = 'Download for macOS (Intel)';
+                }
+            } else if (windowsPlatforms.indexOf(platform) !== -1) {
+                os = 'Windows';
+                downloadUrl = 'https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-Setup.exe';
+                downloadText = 'Download for Windows';
+            } else if (/Linux/.test(platform)) {
+                os = 'Linux';
+                downloadUrl = 'https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI.AppImage';
+                downloadText = 'Download for Linux';
+            } else {
+                downloadText = 'Download ExternAI';
+                downloadUrl = 'https://github.com/luncedo202/-externai-Desktop/releases/latest';
+            }
+
+            return { os, downloadUrl, downloadText };
+        }
+
+        // Set download button
+        const { os, downloadUrl, downloadText } = detectOS();
+        const downloadBtn = document.getElementById('download-btn');
+        const downloadTextEl = document.getElementById('download-text');
+
+        downloadBtn.href = downloadUrl;
+        downloadTextEl.textContent = downloadText;
+
+        // Fetch latest version from GitHub API
+        fetch('https://api.github.com/repos/luncedo202/-externai-Desktop/releases/latest')
+            .then(response => response.json())
+            .then(data => {
+                if (data.tag_name) {
+                    document.getElementById('version').textContent = data.tag_name;
+                }
+            })
+            .catch(error => console.log('Could not fetch version'));
+
+        // Track download
+        downloadBtn.addEventListener('click', () => {
+            console.log('Download started:', os);
+        });
+    </script>
+</body>
+</html>

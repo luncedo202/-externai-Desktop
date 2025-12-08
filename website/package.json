@@ -1,0 +1,10 @@
+{
+  "name": "externai-website",
+  "version": "1.0.0",
+  "description": "ExternAI download website",
+  "scripts": {
+    "dev": "npx http-server . -p 8080 -o",
+    "deploy:vercel": "vercel --prod",
+    "deploy:netlify": "netlify deploy --prod --dir=."
+  }
+}
