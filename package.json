@@ -6,6 +6,7 @@
     "main": "src/main/main.js",
     "scripts": {
         "start": "./start.sh",
+        "postinstall": "electron-builder install-app-deps",
         "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:electron\"",
         "dev:renderer": "vite",
         "dev:electron": "NODE_ENV=development electron .",
@@ -48,7 +49,7 @@
         "electron-updater": "^6.6.2",
         "express": "^5.1.0",
         "node-fetch": "^2.7.0",
-        "node-pty": "^1.0.0",
+        "node-pty": "1.1.0-beta39",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-icons": "^5.0.1"
