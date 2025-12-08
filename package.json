@@ -26,7 +26,10 @@
         "ide",
         "developer-tools"
     ],
-    "author": "Sonelise Pakade",
+    "author": {
+        "name": "Sonelise Pakade",
+        "email": "Luncedosimelaneks@gmail.com"
+    },
     "license": "MIT",
     "devDependencies": {
         "@electron/rebuild": "^4.0.1",
