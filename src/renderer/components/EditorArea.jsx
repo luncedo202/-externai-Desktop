@@ -78,6 +78,7 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
             value={currentFile.content}
             onChange={handleEditorChange}
             theme="vs-dark"
+            loading={<div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#fff'}}>Loading editor...</div>}
             options={{
               fontSize: 14,
               fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",

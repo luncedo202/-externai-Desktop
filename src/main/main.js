@@ -48,11 +48,11 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': isDev ? [
-          // Development: Allow Vite HMR and inline scripts
-          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:*;"
+          // Development: Allow Vite HMR, Monaco CDN, and inline scripts
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:* https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net;"
         ] : [
-          // Production: Strict CSP
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.anthropic.com;"
+          // Production: Allow Monaco CDN
+          "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net;"
         ]
       }
     });
