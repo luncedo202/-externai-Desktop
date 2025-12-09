@@ -55,17 +55,15 @@ jobs:
           python-version: '3.11'
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2
-      - name: Clean install with Windows-specific fixes
+      - name: Install dependencies with Windows fixes
         shell: pwsh
         run: |
-          # Remove node_modules completely to avoid EPERM issues
+          # Clean install to avoid EPERM and cached issues
           if (Test-Path node_modules) { Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue }
           if (Test-Path package-lock.json) { Remove-Item -Force package-lock.json }
-          # Install with clean cache and ignore scripts initially to avoid spawn EINVAL
           npm cache clean --force
-          npm install --ignore-scripts --no-optional
-          # Rebuild native modules separately with proper environment
-          npm rebuild node-pty --build-from-source
+          # Install all dependencies (node-pty 1.0.0 uses prebuilt binaries)
+          npm install
       - run: echo "VITE_ANTHROPIC_API_KEY=placeholder" | Out-File -FilePath .env -Encoding utf8
         shell: pwsh
       - run: npm run build
