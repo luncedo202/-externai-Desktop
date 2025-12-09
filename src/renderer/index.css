@@ -23,7 +23,7 @@ code {
   overflow: hidden;
 }
 
-/* VS Code Theme Colors */
+/* VS Code Theme Colors - Dark Mode (Default) */
 :root {
   --vscode-bg: #1e1e1e;
   --vscode-sidebar-bg: #252526;
@@ -37,6 +37,22 @@ code {
   --vscode-active: #37373d;
   --vscode-focus: #007acc;
   --vscode-selection: #264f78;
+}
+
+/* VS Code Theme Colors - Light Mode */
+[data-theme="light"] {
+  --vscode-bg: #ffffff;
+  --vscode-sidebar-bg: #f3f3f3;
+  --vscode-activitybar-bg: #2c2c2c;
+  --vscode-editor-bg: #ffffff;
+  --vscode-panel-bg: #f8f8f8;
+  --vscode-statusbar-bg: #007acc;
+  --vscode-fg: #3b3b3b;
+  --vscode-border: #e5e5e5;
+  --vscode-hover: #e8e8e8;
+  --vscode-active: #e0e0e0;
+  --vscode-focus: #007acc;
+  --vscode-selection: #add6ff;
 }
 
 /* Scrollbar Styles */
@@ -56,6 +72,18 @@ code {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #4e4e4e;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #f0f0f0;
 }
 
 /* Selection */

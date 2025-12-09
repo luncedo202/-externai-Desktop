@@ -35,6 +35,11 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
+[data-theme="light"] .ai-header h3 {
+  color: #202124;
+  text-shadow: none;
+}
+
 .ai-model-badge {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: #ffffff;
@@ -59,6 +64,11 @@
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+
+[data-theme="light"] .ai-error-banner {
+  color: #c5221f;
+  background: rgba(197, 34, 31, 0.1);
 }
 
 .ai-close {
@@ -240,6 +250,10 @@
   text-shadow: none;
 }
 
+[data-theme="light"] .ai-message.user .message-content {
+  color: #1a73e8;
+}
+
 .ai-message.assistant .message-content {
   background: transparent;
   color: #e8eaed;
@@ -247,6 +261,30 @@
   border: none;
   font-weight: 400;
   backdrop-filter: none;
+}
+
+[data-theme="light"] .ai-message.assistant .message-content {
+  color: #202124;
+}
+
+[data-theme="light"] .ai-message.assistant .message-content h1,
+[data-theme="light"] .ai-message.assistant .message-content h2,
+[data-theme="light"] .ai-message.assistant .message-content h3,
+[data-theme="light"] .ai-message.assistant .message-content h4,
+[data-theme="light"] .ai-message.assistant .message-content h5,
+[data-theme="light"] .ai-message.assistant .message-content h6 {
+  color: #202124;
+  text-shadow: none;
+}
+
+[data-theme="light"] .ai-message.user .message-content code {
+  background: rgba(26, 115, 232, 0.1);
+  color: #1a73e8;
+}
+
+[data-theme="light"] .message-content code {
+  background: rgba(0, 0, 0, 0.06);
+  color: #202124;
 }
 
 /* System messages (file creation, command execution) */
@@ -260,6 +298,11 @@
   letter-spacing: 0.02em;
 }
 
+[data-theme="light"] .ai-message.system .message-content {
+  color: #1967d2;
+  background: rgba(26, 115, 232, 0.08);
+}
+
 .ai-message.system.executing .message-content,
 .ai-message.system[data-scanning="true"] .message-content {
   background: rgba(255, 193, 7, 0.18);
@@ -268,10 +311,21 @@
   color: #ffffff;
 }
 
+[data-theme="light"] .ai-message.system.executing .message-content,
+[data-theme="light"] .ai-message.system[data-scanning="true"] .message-content {
+  color: #f57c00;
+  background: rgba(245, 124, 0, 0.1);
+}
+
 .ai-message.system.error .message-content {
   background: rgba(244, 67, 54, 0.18);
   border-left: 4px solid #f44336;
   color: #ffffff;
+}
+
+[data-theme="light"] .ai-message.system.error .message-content {
+  color: #c5221f;
+  background: rgba(197, 34, 31, 0.1);
 }
 
 /* Command execution status indicators */
@@ -808,6 +862,12 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
+[data-theme="light"] .ai-input {
+  color: #202124;
+  background: #ffffff;
+  border-color: #dadce0;
+}
+
 .ai-input:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -815,9 +875,18 @@
   border-color: rgba(255, 255, 255, 0.1);
 }
 
+[data-theme="light"] .ai-input:disabled {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: #dadce0;
+}
+
 .ai-input::placeholder {
   color: var(--vscode-input-placeholderForeground);
   opacity: 0.7;
+}
+
+[data-theme="light"] .ai-input::placeholder {
+  color: #5f6368;
 }
 
 .ai-input:focus {

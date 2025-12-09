@@ -18,7 +18,8 @@ function Panel({
   debugLogs = [],
   onClearOutput,
   onClearDiagnostics,
-  onClearDebug
+  onClearDebug,
+  theme
 }) {
   const [activeTab, setActiveTab] = useState('terminal');
   const [activeTerminal, setActiveTerminal] = useState(null);
@@ -68,7 +69,28 @@ function Panel({
         cursorBlink: true,
         fontSize: 14,
         fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
-        theme: {
+        theme: theme === 'light' ? {
+          background: '#ffffff',
+          foreground: '#3b3b3b',
+          cursor: '#3b3b3b',
+          selection: '#add6ff',
+          black: '#000000',
+          red: '#c5221f',
+          green: '#1e8e3e',
+          yellow: '#f57c00',
+          blue: '#1967d2',
+          magenta: '#a142f4',
+          cyan: '#00acc1',
+          white: '#5f6368',
+          brightBlack: '#80868b',
+          brightRed: '#ea4335',
+          brightGreen: '#34a853',
+          brightYellow: '#fbbc04',
+          brightBlue: '#4285f4',
+          brightMagenta: '#c678dd',
+          brightCyan: '#00bcd4',
+          brightWhite: '#3b3b3b',
+        } : {
           background: '#1e1e1e',
           foreground: '#cccccc',
           cursor: '#ffffff',

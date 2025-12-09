@@ -28,3 +28,17 @@
 .status-item:hover {
   background: rgba(255, 255, 255, 0.1);
 }
+
+.status-theme-toggle {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.status-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.1);
+}
+
+.status-theme-toggle:active {
+  transform: scale(0.95);
+}

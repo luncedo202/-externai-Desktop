@@ -31,6 +31,10 @@
   position: relative;
 }
 
+[data-theme="light"] .activity-button {
+  color: #ffffff;
+}
+
 .activity-button:hover {
   background: var(--vscode-hover);
 }

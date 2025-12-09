@@ -6,6 +6,11 @@
   color: #d4d4d4;
 }
 
+[data-theme="light"] .problems-panel {
+  background: #ffffff;
+  color: #3b3b3b;
+}
+
 .problems-toolbar {
   display: flex;
   justify-content: space-between;
@@ -13,6 +18,11 @@
   padding: 4px 8px;
   border-bottom: 1px solid #2d2d30;
   background: #252526;
+}
+
+[data-theme="light"] .problems-toolbar {
+  background: #f3f3f3;
+  border-bottom-color: #e5e5e5;
 }
 
 .problems-stats {
@@ -31,8 +41,16 @@
   font-family: inherit;
 }
 
+[data-theme="light"] .stat-button {
+  color: #5f6368;
+}
+
 .stat-button:hover {
   background: #3c3c3c;
+}
+
+[data-theme="light"] .stat-button:hover {
+  background: #e8eaed;
 }
 
 .stat-button.active {
@@ -119,14 +137,26 @@
   font-size: 12px;
 }
 
+[data-theme="light"] .problem-file-header {
+  background: #f3f3f3;
+}
+
 .file-name {
   font-weight: 500;
   color: #d4d4d4;
 }
 
+[data-theme="light"] .file-name {
+  color: #3b3b3b;
+}
+
 .file-count {
   color: #858585;
   font-size: 11px;
+}
+
+[data-theme="light"] .file-count {
+  color: #80868b;
 }
 
 .problem-item {
@@ -140,6 +170,10 @@
 
 .problem-item:hover {
   background: #2a2d2e;
+}
+
+[data-theme="light"] .problem-item:hover {
+  background: #f8f9fa;
 }
 
 .problem-item.error {

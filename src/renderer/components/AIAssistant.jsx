@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader } from 'react-icons/fi';
 import ClaudeService from '../services/ClaudeService';
 import './AIAssistant.css';
@@ -15,11 +15,11 @@ const WORKSPACE_SCAN_DELAY = 500; // ms before scanning workspace
 const STREAM_BUFFER_CHECK_DELAY = 50; // ms when waiting for content
 const DISPLAY_COMPLETION_CHECK_DELAY = 100; // ms when waiting for display to finish
 
-function AIAssistant({ onClose, workspaceFolder, onFileCreated }) {
+const AIAssistant = forwardRef(({ onClose, workspaceFolder, onFileCreated }, ref) => {
   // Load messages from localStorage if available, but reset if workspaceFolder changes
   const defaultWelcome = {
     role: 'assistant',
-    content: 'Hello! I\'m your AI coding assistant powered by Claude 4.5.\n\nI\'m here to help you build software. I can:\n\n• Create complete, working code for websites, mobile apps, and games\n• Debug and fix errors with clear explanations\n• Explain code in simple, beginner-friendly terms\n• Build full project structures ready to deploy\n• Understand your entire project - I can see all your files\n• Run terminal commands automatically\n\nJust tell me what you want to build:\n- "Create a landing page for my startup"\n- "Build a contact form with email validation"\n- "Make a simple game"\n- "Add a login page to my website"\n\nI\'ll immediately create the files and run any necessary commands. No manual steps required.\n\nWhat would you like to build?',
+    content: 'Hello! I\'m your AI coding assistant.\n\nI\'m here to help you build software. I can:\n\n• Create complete, working code for websites, mobile apps, and games\n• Debug and fix errors with clear explanations\n• Explain code in simple, beginner-friendly terms\n• Build full project structures ready to deploy\n• Understand your entire project - I can see all your files\n• Run terminal commands automatically\n\nJust tell me what you want to build:\n- "Create a landing page for my startup"\n- "Build a contact form with email validation"\n- "Make a simple game"\n- "Add a login page to my website"\n\nI\'ll immediately create the files and run any necessary commands. No manual steps required.\n\nWhat would you like to build?',
   };
   
   const [messages, setMessages] = useState(() => {
@@ -110,23 +110,21 @@ function AIAssistant({ onClose, workspaceFolder, onFileCreated }) {
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  // Core send message logic (can be called internally or externally)
+  const sendMessage = async (messageText, attachedImgs = []) => {
+    if (!messageText.trim() || isLoading) return;
 
-    const userMessage = input.trim();
+    const userMessage = messageText.trim();
     
     // Append image URLs to the message if any images are attached
     let messageContent = userMessage;
-    if (attachedImages.length > 0) {
-      const imageUrls = attachedImages.map(img => 
+    if (attachedImgs.length > 0) {
+      const imageUrls = attachedImgs.map(img => 
         `\n\n📷 Image: ${img.urls.regular} (by ${img.user.name} on Unsplash)`
       ).join('');
       messageContent = userMessage + imageUrls;
     }
     
-    setInput('');
-    setAttachedImages([]); // Clear attached images after sending
     setError(null);
     
     // Add user message to UI
@@ -315,6 +313,29 @@ function AIAssistant({ onClose, workspaceFolder, onFileCreated }) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Expose sendMessage method to parent via ref
+  useImperativeHandle(ref, () => ({
+    sendMessage: (messageText) => {
+      sendMessage(messageText, []);
+    }
+  }));
+
+  // Handle form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+    
+    const messageText = input.trim();
+    const imgs = [...attachedImages];
+    
+    // Clear input and images
+    setInput('');
+    setAttachedImages([]);
+    
+    // Send the message
+    await sendMessage(messageText, imgs);
   };
 
   // Handle drag and drop for images
@@ -1442,7 +1463,6 @@ I will automatically execute everything you provide. Just give me the fix NOW.`
       <div className="ai-header">
         <div className="ai-header-content">
           <h3>AI Assistant</h3>
-          <span className="ai-model-badge">Claude Sonnet 4.5</span>
         </div>
         <button className="ai-close" onClick={onClose}>
           <FiX size={18} />
@@ -1702,6 +1722,8 @@ I will automatically execute everything you provide. Just give me the fix NOW.`
       </form>
     </div>
   );
-}
+});
+
+AIAssistant.displayName = 'AIAssistant';
 
 export default AIAssistant;

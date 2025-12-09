@@ -6,6 +6,11 @@
   color: #d4d4d4;
 }
 
+[data-theme="light"] .output-panel {
+  background: #ffffff;
+  color: #3b3b3b;
+}
+
 .output-toolbar {
   display: flex;
   justify-content: space-between;
@@ -13,6 +18,11 @@
   padding: 4px 8px;
   border-bottom: 1px solid #2d2d30;
   background: #252526;
+}
+
+[data-theme="light"] .output-toolbar {
+  background: #f3f3f3;
+  border-bottom-color: #e5e5e5;
 }
 
 .output-channels {
@@ -31,8 +41,18 @@
   outline: none;
 }
 
+[data-theme="light"] .channel-select {
+  background: #ffffff;
+  color: #3b3b3b;
+  border-color: #dadce0;
+}
+
 .channel-select:hover {
   background: #4e4e4e;
+}
+
+[data-theme="light"] .channel-select:hover {
+  background: #f8f9fa;
 }
 
 .channel-select:focus {
@@ -57,8 +77,16 @@
   justify-content: center;
 }
 
+[data-theme="light"] .icon-button {
+  color: #5f6368;
+}
+
 .icon-button:hover {
   background: #3c3c3c;
+}
+
+[data-theme="light"] .icon-button:hover {
+  background: #e8eaed;
 }
 
 .icon-button.active {
@@ -119,18 +147,38 @@
   color: #d4d4d4;
 }
 
+[data-theme="light"] .log-message {
+  color: #3b3b3b;
+}
+
 .log-error .log-message {
   color: #f48771;
+}
+
+[data-theme="light"] .log-error .log-message {
+  color: #c5221f;
 }
 
 .log-warning .log-message {
   color: #cca700;
 }
 
+[data-theme="light"] .log-warning .log-message {
+  color: #f57c00;
+}
+
 .log-success .log-message {
   color: #89d185;
 }
 
+[data-theme="light"] .log-success .log-message {
+  color: #1e8e3e;
+}
+
 .log-info .log-message {
   color: #d4d4d4;
+}
+
+[data-theme="light"] .log-info .log-message {
+  color: #3b3b3b;
 }

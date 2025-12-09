@@ -108,6 +108,8 @@ jobs:
   release:
     needs: [build-mac, build-windows, build-linux]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -117,7 +119,4 @@ jobs:
           files: artifacts/**/*
           draft: false
         env:
-          # Use the repository default GITHUB_TOKEN which has write permissions via the top-level permissions block
-          # To use a Personal Access Token (PAT) instead, create a secret named RELEASE_PAT and uncomment the line below:
-          # GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

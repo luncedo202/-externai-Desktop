@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ActivityBar from './components/ActivityBar';
 import Sidebar from './components/Sidebar';
 import EditorArea from './components/EditorArea';
@@ -17,11 +17,26 @@ function App() {
   const [terminals, setTerminals] = useState([]);
   const [aiVisible, setAiVisible] = useState(true);
   const [explorerRefreshTrigger, setExplorerRefreshTrigger] = useState(0);
+  const [theme, setTheme] = useState(() => {
+    // Load theme from localStorage or default to 'dark'
+    return localStorage.getItem('theme') || 'dark';
+  });
   
   // New state for panels
   const [outputLogs, setOutputLogs] = useState([]);
   const [diagnostics, setDiagnostics] = useState([]);
   const [debugLogs, setDebugLogs] = useState([]);
+  const aiAssistantRef = useRef(null);
+
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
+  };
 
   useEffect(() => {
     // Setup menu event listeners
@@ -92,6 +107,13 @@ function App() {
     console.log('🔄 File created by AI, refreshing explorer:', filePath);
     // Always refresh explorer when AI creates files
     setExplorerRefreshTrigger(prev => prev + 1);
+  };
+
+  // Handler for Preview button - triggers AI to run dev server
+  const handlePreviewRequest = () => {
+    if (aiAssistantRef.current) {
+      aiAssistantRef.current.sendMessage('Run the development server for this project (npm run dev or npm start)');
+    }
   };
 
   const handleOpenFolder = async (folderPath) => {
@@ -227,6 +249,8 @@ function App() {
           onOpenFile={handleOpenFile}
           onOpenFolder={handleOpenFolder}
           explorerRefreshTrigger={explorerRefreshTrigger}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       )}
       <div className="main-content">
@@ -237,6 +261,8 @@ function App() {
           onFileClose={handleCloseFile}
           onContentChange={handleFileContentChange}
           onOpenFolder={handleOpenFolder}
+          theme={theme}
+          onPreviewClick={handlePreviewRequest}
         />
         {panelVisible && (
           <Panel
@@ -250,10 +276,12 @@ function App() {
             onClearOutput={() => setOutputLogs([])}
             onClearDiagnostics={() => setDiagnostics([])}
             onClearDebug={() => setDebugLogs([])}
+            theme={theme}
           />
         )}
       </div>
       <AIAssistant 
+        ref={aiAssistantRef}
         onClose={() => setAiVisible(false)} 
         workspaceFolder={workspaceFolder}
         onFileCreated={handleFileCreatedByAI}

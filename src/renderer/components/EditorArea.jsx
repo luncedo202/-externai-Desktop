@@ -3,7 +3,7 @@ import Editor from '@monaco-editor/react';
 import { FiX, FiMonitor, FiCode } from 'react-icons/fi';
 import './EditorArea.css';
 
-function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onContentChange, onOpenFolder }) {
+function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onContentChange, onOpenFolder, theme, onPreviewClick }) {
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('http://localhost:3000');
   const currentFile = openFiles.find((f) => f.id === activeFile);
@@ -25,6 +25,17 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
       }
     }
   };
+
+  const handlePreviewClick = () => {
+    if (!showPreview && onPreviewClick) {
+      // Trigger AI to run the dev server
+      onPreviewClick();
+    }
+    setShowPreview(!showPreview);
+  };
+  
+  // Determine Monaco theme based on app theme
+  const monacoTheme = theme === 'dark' ? 'vs-dark' : 'light';
 
   return (
     <div className="editor-area">
@@ -53,7 +64,7 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
         <div className="editor-toolbar">
           <button
             className={`toolbar-button ${showPreview ? 'active' : ''}`}
-            onClick={() => setShowPreview(!showPreview)}
+            onClick={handlePreviewClick}
             title="Toggle Live Preview"
           >
             {showPreview ? <FiCode size={16} /> : <FiMonitor size={16} />}
@@ -77,8 +88,8 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
             language={currentFile.language}
             value={currentFile.content}
             onChange={handleEditorChange}
-            theme="vs-dark"
-            loading={<div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#fff'}}>Loading editor...</div>}
+            theme={monacoTheme}
+            loading={<div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--vscode-fg)'}}>Loading editor...</div>}
             options={{
               fontSize: 14,
               fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",

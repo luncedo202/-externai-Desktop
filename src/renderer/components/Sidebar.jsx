@@ -4,9 +4,10 @@ import Search from './sidebar/Search';
 import SourceControl from './sidebar/SourceControl';
 import RunDebug from './sidebar/RunDebug';
 import ImageSearch from './sidebar/ImageSearch';
+import Settings from './sidebar/Settings';
 import './Sidebar.css';
 
-function Sidebar({ activeView, workspaceFolder, onOpenFile, onOpenFolder, explorerRefreshTrigger }) {
+function Sidebar({ activeView, workspaceFolder, onOpenFile, onOpenFolder, explorerRefreshTrigger, theme, onToggleTheme }) {
   const renderView = () => {
     switch (activeView) {
       case 'explorer':
@@ -29,7 +30,7 @@ function Sidebar({ activeView, workspaceFolder, onOpenFile, onOpenFolder, explor
       case 'extensions':
         return <div className="sidebar-content">Extensions</div>;
       case 'settings':
-        return <div className="sidebar-content">Settings</div>;
+        return <Settings theme={theme} onToggleTheme={onToggleTheme} />;
       default:
         return null;
     }

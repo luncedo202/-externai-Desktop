@@ -41,17 +41,17 @@ function createWindow() {
     trafficLightPosition: { x: 10, y: 10 },
   });
 
-  // Set Content Security Policy (relaxed for development)
+  // Set Content Security Policy
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     const isDev = process.env.NODE_ENV === 'development';
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': isDev ? [
-          // Development: Allow Vite HMR, Monaco CDN, and inline scripts
-          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:* https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net;"
+          // Development: Allow Vite HMR, Monaco CDN, but restrict unsafe-eval to specific needs
+          "default-src 'self'; script-src 'self' 'unsafe-inline' http://localhost:* https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:* https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net;"
         ] : [
-          // Production: Allow Monaco CDN
+          // Production: Strict CSP, allow Monaco CDN
           "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net;"
         ]
       }
@@ -302,38 +302,49 @@ ipcMain.handle('terminal:create', (event, cwd) => {
     };
   }
   
-  const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
-  const ptyProcess = pty.spawn(shell, [], {
-    name: 'xterm-color',
-    cols: 80,
-    rows: 30,
-    cwd: cwd || process.env.HOME || process.cwd(),
-    env: process.env,
-  });
-
-  const terminalId = Date.now().toString();
-  terminals.set(terminalId, ptyProcess);
-  terminalBuffers.set(terminalId, []); // Initialize output buffer
-
-  ptyProcess.onData((data) => {
-    // Store output in buffer (keep last 1000 lines)
-    const buffer = terminalBuffers.get(terminalId) || [];
-    buffer.push(data);
-    if (buffer.length > 1000) {
-      buffer.shift(); // Remove oldest line
-    }
-    terminalBuffers.set(terminalId, buffer);
+  try {
+    // Use the user's default shell or fallback to zsh/bash
+    const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
+    console.log('[Terminal] Attempting to spawn:', shell, 'in', cwd || process.env.HOME);
     
-    mainWindow.webContents.send('terminal:data', terminalId, data);
-  });
+    const ptyProcess = pty.spawn(shell, [], {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 30,
+      cwd: cwd || process.env.HOME || process.cwd(),
+      env: process.env,
+    });
 
-  ptyProcess.onExit(() => {
-    terminals.delete(terminalId);
-    terminalBuffers.delete(terminalId);
-    mainWindow.webContents.send('terminal:exit', terminalId);
-  });
+    const terminalId = Date.now().toString();
+    terminals.set(terminalId, ptyProcess);
+    terminalBuffers.set(terminalId, []); // Initialize output buffer
 
-  return { success: true, terminalId };
+    ptyProcess.onData((data) => {
+      // Store output in buffer (keep last 1000 lines)
+      const buffer = terminalBuffers.get(terminalId) || [];
+      buffer.push(data);
+      if (buffer.length > 1000) {
+        buffer.shift(); // Remove oldest line
+      }
+      terminalBuffers.set(terminalId, buffer);
+      
+      mainWindow.webContents.send('terminal:data', terminalId, data);
+    });
+
+    ptyProcess.onExit(() => {
+      terminals.delete(terminalId);
+      terminalBuffers.delete(terminalId);
+      mainWindow.webContents.send('terminal:exit', terminalId);
+    });
+
+    return { success: true, terminalId };
+  } catch (error) {
+    console.error('[Terminal] Error creating terminal:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to create terminal'
+    };
+  }
 });
 
 ipcMain.handle('terminal:write', (event, terminalId, data) => {
