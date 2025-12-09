@@ -1,8 +1,14 @@
 # Eletr0 Studio
 
-A powerful, AI-powered development environment built with Electron, featuring VS Code capabilities for building websites, mobile apps, and games.
+A powerful, AI-powered development environment built with Electron, featuring VS Code capabilities for building websites, mobile apps, and games. Includes Firebase-based user authentication and usage tracking.
 
 ## Features
+
+### 🔐 User Authentication
+- **Firebase Authentication** - Secure email/password authentication
+- **Usage tracking** - Monitor API usage per user (requests/tokens per day)
+- **Session management** - Persistent login with secure token handling
+- **Rate limiting** - Configurable daily limits per user
 
 ### 🎨 Full IDE Capabilities
 - **Monaco Editor** - The same powerful code editor from VS Code
@@ -43,42 +49,80 @@ A powerful, AI-powered development environment built with Electron, featuring VS
 - **Bug fixing** - AI-powered debugging assistance
 - **Code explanations** - Understand complex code
 - **Project scaffolding** - Create complete project templates
+- **Secure API proxy** - Backend authentication for Claude API access
 
 ### 🚀 Project Templates
 - **Website Projects** - HTML, CSS, JavaScript, React
 - **Mobile Apps** - React Native templates
 - **Games** - HTML5 Canvas, Phaser game templates
-
 ## Installation
+
+### Prerequisites
+- Node.js 18 or higher
+- Firebase account (for authentication)
+
+### Quick Start
 
 ```bash
 # Install dependencies
 npm install
 
-# Run in development mode
-npm run dev
-
-# Build for production
-npm run build
-
-# Package the app
-npm run dist
-```
+# Install backend dependencies
+cd backend
+npm install
+cd ..
 
 ## Development
 
 ```bash
-# Start the renderer process (React app)
-npm run dev:renderer
+# Terminal 1 - Start backend server
+cd backend
+npm run dev
 
-# Start Electron
-npm run dev:electron
-
-# Both together
+# Terminal 2 - Start Electron app
 npm run dev
 ```
 
-## Project Structure
+The backend server runs on `http://localhost:3001` by default and proxies Claude API requests with Firebase authentication. run dist
+```
+
+### Firebase Setup
+```
+eletr0/
+├── backend/               # Express backend server
+│   ├── middleware/        # Auth middleware
+│   ├── routes/           # API routes (Claude proxy)
+│   ├── server.js         # Backend entry point
+│   └── .env.example      # Backend config template
+├── src/
+│   ├── main/             # Electron main process
+│   │   ├── main.js       # Main entry point
+│   │   └── preload.js    # Preload script for IPC
+│   └── renderer/         # React renderer process
+│       ├── components/   # React components
+│       │   ├── ActivityBar.jsx
+│       │   ├── Sidebar.jsx
+│       │   ├── EditorArea.jsx
+│       │   ├── Panel.jsx
+│       │   ├── StatusBar.jsx
+│       │   ├── AIAssistant.jsx
+│       │   ├── AuthScreen.jsx  # Login/signup UI
+│       │   └── sidebar/
+│       │       ├── Explorer.jsx
+│       │       ├── Search.jsx
+│       │       └── SourceControl.jsx
+│       ├── services/     # Service layer
+│       │   ├── FirebaseService.js  # Firebase auth wrapper
+│       │   └── ClaudeService.js    # API client
+│       ├── App.jsx       # Main app component
+│       ├── main.jsx      # React entry point
+│       └── index.css     # Global styles
+├── .env.example          # Client config template
+├── FIREBASE_SETUP.md     # Firebase setup guide
+├── index.html           # HTML template
+├── package.json
+└── vite.config.js       # Vite configuration
+```Project Structure
 
 ```
 eletr0/
@@ -114,16 +158,37 @@ eletr0/
 - `Cmd/Ctrl + Shift + O` - Open Folder
 - `Cmd/Ctrl + S` - Save
 - `Cmd/Ctrl + Shift + S` - Save As
+## Technologies Used
 
-### View
-- `Cmd/Ctrl + B` - Toggle Sidebar
-- `Cmd/Ctrl + \`` - Toggle Terminal
-- `Cmd/Ctrl + Shift + \`` - New Terminal
+- **Electron** - Cross-platform desktop app framework
+- **React** - UI library
+- **Monaco Editor** - Code editor
+- **XTerm.js** - Terminal emulator
+- **Vite** - Build tool
+- **Node-pty** - Terminal process management
+- **Firebase** - Authentication and Firestore database
+- **Express** - Backend API server
+- **Axios** - HTTP client for Claude API
 
-### Editor
-- `Cmd/Ctrl + /` - Toggle Comment
-- `Cmd/Ctrl + F` - Find
-- `Cmd/Ctrl + H` - Replace
+## Backend Architecture
+
+The backend provides:
+- **Firebase token verification** - Validates user authentication
+- **Claude API proxy** - Securely proxies AI requests
+- **Usage tracking** - Monitors per-user daily limits in Firestore
+- **Rate limiting** - Prevents abuse with configurable limits
+
+Environment variables in `backend/.env`:
+```env
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=service-account@project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+ANTHROPIC_API_KEY=sk-ant-xxxxx
+MAX_REQUESTS_PER_DAY=100
+MAX_TOKENS_PER_DAY=100000
+```
+
+## Features in Development
 
 ## Technologies Used
 

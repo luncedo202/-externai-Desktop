@@ -49,8 +49,10 @@
         "axios": "^1.6.2",
         "chokidar": "^3.5.3",
         "cors": "^2.8.5",
+        "electron-store": "^8.2.0",
         "electron-updater": "^6.6.2",
         "express": "^5.1.0",
+        "firebase": "^12.6.0",
         "node-fetch": "^2.7.0",
         "node-pty": "^1.0.0",
         "react": "^18.2.0",
@@ -87,7 +89,7 @@
         ],
         "mac": {
             "category": "public.app-category.developer-tools",
-            "icon": "assets/externai-logo.png",
+            "icon": "assets/ExternAI-logo.png",
             "target": [
                 {
                     "target": "dmg",
@@ -125,7 +127,7 @@
             "title": "ExternAI ${version}"
         },
         "win": {
-            "icon": "assets/externai-logo.png",
+            "icon": "assets/ExternAI-logo.png",
             "target": [
                 {
                     "target": "nsis",
@@ -152,7 +154,7 @@
             "shortcutName": "ExternAI"
         },
         "linux": {
-            "icon": "assets/externai-logo.png",
+            "icon": "assets/ExternAI-logo.png",
             "category": "Development",
             "target": [
                 {

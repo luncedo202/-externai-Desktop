@@ -5,9 +5,14 @@ import EditorArea from './components/EditorArea';
 import Panel from './components/Panel';
 import StatusBar from './components/StatusBar';
 import AIAssistant from './components/AIAssistant';
+import AuthScreen from './components/AuthScreen';
+import FirebaseService from './services/FirebaseService';
 import './App.css';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [activeView, setActiveView] = useState('explorer');
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
@@ -27,6 +32,34 @@ function App() {
   const [diagnostics, setDiagnostics] = useState([]);
   const [debugLogs, setDebugLogs] = useState([]);
   const aiAssistantRef = useRef(null);
+
+  // Check authentication on app start with Firebase
+  useEffect(() => {
+    const unsubscribe = FirebaseService.onAuthChange((user) => {
+      if (user) {
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+      } else {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+      }
+      setCheckingAuth(false);
+    });
+
+    // Cleanup listener on unmount
+    return () => unsubscribe();
+  }, []);
+
+  const handleAuthSuccess = (user) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = async () => {
+    await FirebaseService.logout();
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+  };
 
   // Apply theme to document
   useEffect(() => {
@@ -113,6 +146,30 @@ function App() {
   const handlePreviewRequest = () => {
     if (aiAssistantRef.current) {
       aiAssistantRef.current.sendMessage('Run the development server for this project (npm run dev or npm start)');
+    }
+  };
+
+  // Handler for Deploy button - triggers AI to deploy to Vercel
+  const handleDeployRequest = () => {
+    if (!workspaceFolder) {
+      alert('Please open a project folder first');
+      return;
+    }
+    
+    // Show AI assistant if hidden
+    if (!aiVisible) {
+      setAiVisible(true);
+    }
+    
+    // Send deployment request to AI
+    if (aiAssistantRef.current) {
+      aiAssistantRef.current.sendMessage(`Deploy this project to Vercel. Please:
+1. Check if Vercel CLI is installed (vercel --version), if not install it globally
+2. Check if there's a vercel.json config file, if not create one with optimal settings for this project type
+3. Run: vercel --prod
+4. Provide me with the deployment URL once complete
+
+Project location: ${workspaceFolder}`);
     }
   };
 
@@ -235,6 +292,19 @@ function App() {
     return languageMap[ext] || 'plaintext';
   };
 
+  // Show auth screen if not authenticated
+  if (checkingAuth) {
+    return (
+      <div className="app" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <p style={{ color: '#d4d4d4' }}>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
+  }
+
   return (
     <div className="app">
       <ActivityBar
@@ -251,6 +321,7 @@ function App() {
           explorerRefreshTrigger={explorerRefreshTrigger}
           theme={theme}
           onToggleTheme={toggleTheme}
+          onLogout={handleLogout}
         />
       )}
       <div className="main-content">
@@ -289,6 +360,7 @@ function App() {
       <StatusBar
         activeFile={openFiles.find((f) => f.id === activeFile)}
         workspaceFolder={workspaceFolder}
+        onDeployStart={handleDeployRequest}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { FiX, FiMonitor, FiCode } from 'react-icons/fi';
 import './EditorArea.css';
@@ -6,7 +6,26 @@ import './EditorArea.css';
 function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onContentChange, onOpenFolder, theme, onPreviewClick }) {
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('http://localhost:3000');
+  const [fontSize, setFontSize] = useState(14);
+  const [tabSize, setTabSize] = useState(2);
   const currentFile = openFiles.find((f) => f.id === activeFile);
+
+  // Load editor settings from localStorage
+  useEffect(() => {
+    const savedFontSize = parseInt(localStorage.getItem('editorFontSize')) || 14;
+    const savedTabSize = parseInt(localStorage.getItem('editorTabSize')) || 2;
+    setFontSize(savedFontSize);
+    setTabSize(savedTabSize);
+
+    // Listen for storage changes to update in real-time
+    const handleStorageChange = () => {
+      setFontSize(parseInt(localStorage.getItem('editorFontSize')) || 14);
+      setTabSize(parseInt(localStorage.getItem('editorTabSize')) || 2);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const handleEditorChange = (value) => {
     if (currentFile) {
@@ -91,12 +110,12 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
             theme={monacoTheme}
             loading={<div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--vscode-fg)'}}>Loading editor...</div>}
             options={{
-              fontSize: 14,
+              fontSize: fontSize,
               fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
               minimap: { enabled: true },
               scrollBeyondLastLine: false,
               automaticLayout: true,
-              tabSize: 2,
+              tabSize: tabSize,
               insertSpaces: true,
               wordWrap: 'on',
               lineNumbers: 'on',

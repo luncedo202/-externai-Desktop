@@ -4,6 +4,13 @@ require('./ClaudeProxy');
 const path = require('path');
 const fs = require('fs').promises;
 const chokidar = require('chokidar');
+const Store = require('electron-store');
+
+// Secure storage for auth tokens
+const store = new Store({
+  encryptionKey: 'externai-secure-key-change-in-production',
+  name: 'auth'
+});
 
 // Load node-pty for terminal support
 let pty;
@@ -48,11 +55,11 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': isDev ? [
-          // Development: Allow Vite HMR, Monaco CDN, but restrict unsafe-eval to specific needs
-          "default-src 'self'; script-src 'self' 'unsafe-inline' http://localhost:* https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:* https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net;"
+          // Development: Allow Vite HMR, Monaco CDN, Firebase Auth
+          "default-src 'self'; script-src 'self' 'unsafe-inline' http://localhost:* https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:* https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com; worker-src 'self' blob: https://cdn.jsdelivr.net;"
         ] : [
-          // Production: Strict CSP, allow Monaco CDN
-          "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net;"
+          // Production: Strict CSP, allow Monaco CDN, Firebase Auth
+          "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com; worker-src 'self' blob: https://cdn.jsdelivr.net;"
         ]
       }
     });
@@ -189,6 +196,16 @@ function createMenu() {
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
 }
+
+// IPC handler to trigger open folder dialog
+ipcMain.on('menu-trigger-open-folder', async (event) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (!result.canceled) {
+    mainWindow.webContents.send('menu-open-folder', result.filePaths[0]);
+  }
+});
 
 // File System Operations
 ipcMain.handle('fs:readFile', async (event, filePath) => {
@@ -1080,6 +1097,74 @@ autoUpdater.on('update-downloaded', () => {
 
 autoUpdater.on('error', (error) => {
   console.error('❌ Auto-updater error:', error);
+});
+
+// ==================== Authentication IPC Handlers ====================
+
+// Set auth tokens
+ipcMain.handle('auth:setTokens', async (event, tokens) => {
+  try {
+    store.set('tokens', tokens);
+    return { success: true };
+  } catch (error) {
+    console.error('Error storing tokens:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get auth tokens
+ipcMain.handle('auth:getTokens', async () => {
+  try {
+    const tokens = store.get('tokens');
+    return { success: true, tokens };
+  } catch (error) {
+    console.error('Error retrieving tokens:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Clear auth tokens
+ipcMain.handle('auth:clearTokens', async () => {
+  try {
+    store.delete('tokens');
+    return { success: true };
+  } catch (error) {
+    console.error('Error clearing tokens:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Set user info
+ipcMain.handle('auth:setUser', async (event, user) => {
+  try {
+    store.set('user', user);
+    return { success: true };
+  } catch (error) {
+    console.error('Error storing user:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get user info
+ipcMain.handle('auth:getUser', async () => {
+  try {
+    const user = store.get('user');
+    return { success: true, user };
+  } catch (error) {
+    console.error('Error retrieving user:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Clear user info
+ipcMain.handle('auth:clearUser', async () => {
+  try {
+    store.delete('user');
+    return { success: true };
+  } catch (error) {
+    console.error('Error clearing user:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // Check for updates on app start (only in production)

@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onToggleSidebar: (callback) => ipcRenderer.on('menu-toggle-sidebar', callback),
     onNewTerminal: (callback) => ipcRenderer.on('menu-new-terminal', callback),
     onSplitTerminal: (callback) => ipcRenderer.on('menu-split-terminal', callback),
+    triggerOpenFolder: () => ipcRenderer.send('menu-trigger-open-folder'),
   },
 
   // Output Channel
@@ -118,5 +119,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeAllListeners('claude:stream:done');
       ipcRenderer.removeAllListeners('claude:stream:error');
     },
+  },
+
+  // Authentication
+  auth: {
+    setTokens: (tokens) => ipcRenderer.invoke('auth:setTokens', tokens),
+    getTokens: () => ipcRenderer.invoke('auth:getTokens'),
+    clearTokens: () => ipcRenderer.invoke('auth:clearTokens'),
+    setUser: (user) => ipcRenderer.invoke('auth:setUser', user),
+    getUser: () => ipcRenderer.invoke('auth:getUser'),
+    clearUser: () => ipcRenderer.invoke('auth:clearUser'),
   },
 });

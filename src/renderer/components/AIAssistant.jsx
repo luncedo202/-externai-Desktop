@@ -116,6 +116,33 @@ const AIAssistant = forwardRef(({ onClose, workspaceFolder, onFileCreated }, ref
 
     const userMessage = messageText.trim();
     
+    // Check if workspace folder is open - if not, prompt user to open one first
+    if (!workspaceFolder) {
+      // Check if message is about creating/building something
+      const creationKeywords = ['create', 'build', 'make', 'generate', 'develop', 'write', 'add', 'setup', 'start', 'new', 'deploy'];
+      const isCreationRequest = creationKeywords.some(keyword => 
+        userMessage.toLowerCase().includes(keyword)
+      );
+      
+      if (isCreationRequest) {
+        // Add system message asking to open folder
+        setMessages(prev => [...prev, 
+          { role: 'user', content: messageText },
+          { 
+            role: 'assistant', 
+            content: '📁 **Please open a folder first**\n\nTo create files and start development, I need you to open a project folder:\n\n1. Click **File → Open Folder** in the menu\n2. Select or create a new folder for your project\n3. Then I can start creating files and building your project!\n\nWould you like me to help you once you\'ve opened a folder?' 
+          }
+        ]);
+        
+        // Trigger open folder dialog
+        if (window.electronAPI?.menu?.triggerOpenFolder) {
+          window.electronAPI.menu.triggerOpenFolder();
+        }
+        
+        return;
+      }
+    }
+    
     // Append image URLs to the message if any images are attached
     let messageContent = userMessage;
     if (attachedImgs.length > 0) {
