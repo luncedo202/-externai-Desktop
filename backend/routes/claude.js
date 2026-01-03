@@ -29,7 +29,7 @@ async function getUserUsage(userId) {
       limits: {
         maxRequestsPerDay: parseInt(process.env.MAX_REQUESTS_PER_DAY) || 100,
         maxTokensPerDay: Infinity, // Unlimited
-        maxLifetimeRequests: 20
+        maxLifetimeRequests: parseInt(process.env.MAX_LIFETIME_REQUESTS) || 20
       }
     };
     await userRef.set(userData);
@@ -73,7 +73,7 @@ router.post('/stream', authenticateToken, async (req, res) => {
     const userData = await getUserUsage(userId);
 
     // Check if user has exceeded limits
-    const maxLifetimeRequests = 20;
+    const maxLifetimeRequests = parseInt(process.env.MAX_LIFETIME_REQUESTS) || 20;
 
     // Ensure limits object has the lifetime limit
     if (!userData.limits.maxLifetimeRequests) {
