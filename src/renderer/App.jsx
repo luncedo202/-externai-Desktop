@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect, forwardRef } from 'react';
 import ActivityBar from './components/ActivityBar';
 import Sidebar from './components/Sidebar';
 import EditorArea from './components/EditorArea';
@@ -7,6 +7,7 @@ import StatusBar from './components/StatusBar';
 import AIAssistant from './components/AIAssistant';
 import AuthScreen from './components/AuthScreen';
 import FirebaseService from './services/FirebaseService';
+import AnalyticsService from './services/AnalyticsService';
 import './App.css';
 
 function App() {
@@ -22,23 +23,34 @@ function App() {
   const [terminals, setTerminals] = useState([]);
   const [aiVisible, setAiVisible] = useState(true);
   const [explorerRefreshTrigger, setExplorerRefreshTrigger] = useState(0);
+  const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [theme, setTheme] = useState(() => {
-    // Load theme from localStorage or default to 'dark'
-    return localStorage.getItem('theme') || 'dark';
+    // Load theme from localStorage or default to 'light'
+    // Changed key to 'app_theme' to reset legacy 'dark' preference
+    return localStorage.getItem('app_theme') || 'light';
   });
-  
+
   // New state for panels
   const [outputLogs, setOutputLogs] = useState([]);
+  const [tasks, setTasks] = useState([]); // Array of { id, title, status, description, timestamp }
+  const [pendingPlan, setPendingPlan] = useState(null); // Track pending AI plan for approval
   const [diagnostics, setDiagnostics] = useState([]);
   const [debugLogs, setDebugLogs] = useState([]);
+  const [hasAiResponded, setHasAiResponded] = useState(false);
   const aiAssistantRef = useRef(null);
 
-  // Check authentication on app start with Firebase
+  // Initialize analytics and check authentication on app start
   useEffect(() => {
+    // Initialize Google Analytics
+    AnalyticsService.init();
+    AnalyticsService.trackPageView('App Start');
+
     const unsubscribe = FirebaseService.onAuthChange((user) => {
       if (user) {
         setCurrentUser(user);
         setIsAuthenticated(true);
+        // Track user session
+        AnalyticsService.trackSession(user.uid, user.displayName || user.email);
       } else {
         setCurrentUser(null);
         setIsAuthenticated(false);
@@ -64,7 +76,7 @@ function App() {
   // Apply theme to document
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
+    localStorage.setItem('app_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
@@ -119,25 +131,55 @@ function App() {
     if (result.success) {
       const fileName = filePath.split('/').pop();
       const extension = fileName.split('.').pop();
-      const newFile = {
-        id: filePath,
-        name: fileName,
-        path: filePath,
-        content: result.content,
-        isDirty: false,
-        language: getLanguageFromExtension(extension),
-      };
-      setOpenFiles([...openFiles, newFile]);
-      setActiveFile(newFile.id);
-      
+
+      // Check if file is already open
+      const existingFile = openFiles.find(f => f.id === filePath);
+
+      if (existingFile) {
+        // Just update content and set active if it already exists
+        setOpenFiles(prev => prev.map(f =>
+          f.id === filePath
+            ? { ...f, content: result.content, isDirty: false }
+            : f
+        ));
+        setActiveFile(filePath);
+      } else {
+        // Add new file
+        const newFile = {
+          id: filePath,
+          name: fileName,
+          path: filePath,
+          content: result.content,
+          isDirty: false,
+          language: getLanguageFromExtension(extension),
+        };
+        setOpenFiles(prev => [...prev, newFile]);
+        setActiveFile(newFile.id);
+      }
+
       // Refresh Explorer to show new files
       setExplorerRefreshTrigger(prev => prev + 1);
     }
   };
-  
+
   // Handler for AI-created files - refreshes explorer without opening
   const handleFileCreatedByAI = async (filePath) => {
-    console.log('🔄 File created by AI, refreshing explorer:', filePath);
+    console.log('🔄 [App.jsx] File created by AI, refreshing explorer:', filePath);
+
+    // Check if this file is currently open in any tab
+    const isOpen = openFiles.some(f => f.id === filePath);
+    if (isOpen) {
+      console.log('📝 [App.jsx] Open file was touched by AI, updating content:', filePath);
+      const result = await window.electronAPI.fs.readFile(filePath);
+      if (result.success) {
+        setOpenFiles(prev => prev.map(f =>
+          f.id === filePath
+            ? { ...f, content: result.content, isDirty: false }
+            : f
+        ));
+      }
+    }
+
     // Always refresh explorer when AI creates files
     setExplorerRefreshTrigger(prev => prev + 1);
   };
@@ -146,30 +188,6 @@ function App() {
   const handlePreviewRequest = () => {
     if (aiAssistantRef.current) {
       aiAssistantRef.current.sendMessage('Run the development server for this project (npm run dev or npm start)');
-    }
-  };
-
-  // Handler for Deploy button - triggers AI to deploy to Vercel
-  const handleDeployRequest = () => {
-    if (!workspaceFolder) {
-      alert('Please open a project folder first');
-      return;
-    }
-    
-    // Show AI assistant if hidden
-    if (!aiVisible) {
-      setAiVisible(true);
-    }
-    
-    // Send deployment request to AI
-    if (aiAssistantRef.current) {
-      aiAssistantRef.current.sendMessage(`Deploy this project to Vercel. Please:
-1. Check if Vercel CLI is installed (vercel --version), if not install it globally
-2. Check if there's a vercel.json config file, if not create one with optimal settings for this project type
-3. Run: vercel --prod
-4. Provide me with the deployment URL once complete
-
-Project location: ${workspaceFolder}`);
     }
   };
 
@@ -216,7 +234,7 @@ Project location: ${workspaceFolder}`);
         f.id === fileId ? { ...f, content, isDirty: true } : f
       )
     );
-    
+
     // Analyze file for diagnostics when content changes
     const file = openFiles.find(f => f.id === fileId);
     if (file?.path && window.electronAPI?.diagnostics?.analyze) {
@@ -253,11 +271,35 @@ Project location: ${workspaceFolder}`);
     // Remove from state
     const newTerminals = terminals.filter(t => t.id !== terminalId);
     setTerminals(newTerminals);
-    
+
     // If no terminals left, hide panel
     if (newTerminals.length === 0) {
       setPanelVisible(false);
     }
+  };
+
+  // Task Management Handlers
+  const handleAddTask = (title, status = 'pending', description = '') => {
+    const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    const newTask = {
+      id,
+      title,
+      status,
+      description,
+      timestamp: Date.now()
+    };
+    setTasks(prev => [newTask, ...prev]);
+
+    // Auto-open panel to tasks tab when a new task starts
+    if (status === 'in-progress' || status === 'pending') {
+      setPanelVisible(true);
+    }
+
+    return id;
+  };
+
+  const handleUpdateTask = (taskId, updates) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
   };
 
   // Automatically create a terminal on app start
@@ -307,63 +349,80 @@ Project location: ${workspaceFolder}`);
 
   return (
     <div className="app">
-      <ActivityBar
-        activeView={activeView}
-        onViewChange={setActiveView}
-        onAIToggle={() => setAiVisible(!aiVisible)}
-      />
-      {sidebarVisible && (
-        <Sidebar
+      <div className="workspace">
+        <ActivityBar
           activeView={activeView}
-          workspaceFolder={workspaceFolder}
-          onOpenFile={handleOpenFile}
-          onOpenFolder={handleOpenFolder}
-          explorerRefreshTrigger={explorerRefreshTrigger}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          onLogout={handleLogout}
+          onViewChange={setActiveView}
+          onAIToggle={() => setAiVisible(!aiVisible)}
         />
-      )}
-      <div className="main-content">
-        <EditorArea
-          openFiles={openFiles}
-          activeFile={activeFile}
-          onFileSelect={setActiveFile}
-          onFileClose={handleCloseFile}
-          onContentChange={handleFileContentChange}
-          onOpenFolder={handleOpenFolder}
-          theme={theme}
-          onPreviewClick={handlePreviewRequest}
-        />
-        {panelVisible && (
-          <Panel
-            terminals={terminals}
-            onNewTerminal={handleNewTerminal}
-            onCloseTerminal={handleCloseTerminal}
+        {sidebarVisible && (
+          <Sidebar
+            activeView={activeView}
             workspaceFolder={workspaceFolder}
-            outputLogs={outputLogs}
-            diagnostics={diagnostics}
-            debugLogs={debugLogs}
-            onClearOutput={() => setOutputLogs([])}
-            onClearDiagnostics={() => setDiagnostics([])}
-            onClearDebug={() => setDebugLogs([])}
+            onOpenFile={handleOpenFile}
+            onOpenFolder={handleOpenFolder}
+            explorerRefreshTrigger={explorerRefreshTrigger}
+            onExplorerRefresh={() => {
+              if (aiAssistantRef.current) {
+                aiAssistantRef.current.syncFiles();
+              }
+            }}
             theme={theme}
+            onToggleTheme={toggleTheme}
+            onLogout={handleLogout}
+            hasAiResponded={hasAiResponded}
           />
         )}
+        <div className="main-content">
+          <EditorArea
+            openFiles={openFiles}
+            activeFile={activeFile}
+            onFileSelect={setActiveFile}
+            onFileClose={handleCloseFile}
+            onContentChange={handleFileContentChange}
+            onOpenFolder={handleOpenFolder}
+            theme={theme}
+            onPreviewClick={handlePreviewRequest}
+            onCursorChange={setCursorPosition}
+            pendingPlan={pendingPlan}
+          />
+          {panelVisible && (
+            <Panel
+              terminals={terminals}
+              onNewTerminal={handleNewTerminal}
+              onCloseTerminal={handleCloseTerminal}
+              workspaceFolder={workspaceFolder}
+              outputLogs={outputLogs}
+              diagnostics={diagnostics}
+              debugLogs={debugLogs}
+              onClearOutput={() => setOutputLogs([])}
+              onClearDiagnostics={() => setDiagnostics([])}
+              onClearDebug={() => setDebugLogs([])}
+              theme={theme}
+            />
+          )}
+        </div>
+        <AIAssistant
+          ref={aiAssistantRef}
+          onClose={() => setAiVisible(false)}
+          visible={aiVisible}
+          workspaceFolder={workspaceFolder}
+          onOpenFolder={handleOpenFolder}
+          onFileCreated={handleFileCreatedByAI}
+          onAddTask={handleAddTask}
+          onUpdateTask={handleUpdateTask}
+          explorerRefreshTrigger={explorerRefreshTrigger}
+          onFirstResponse={() => setHasAiResponded(true)}
+        />
       </div>
-      <AIAssistant 
-        ref={aiAssistantRef}
-        onClose={() => setAiVisible(false)} 
-        workspaceFolder={workspaceFolder}
-        onFileCreated={handleFileCreatedByAI}
-      />
       <StatusBar
         activeFile={openFiles.find((f) => f.id === activeFile)}
         workspaceFolder={workspaceFolder}
-        onDeployStart={handleDeployRequest}
+        cursorPosition={cursorPosition}
       />
     </div>
   );
 }
+
 
 export default App;

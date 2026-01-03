@@ -5,10 +5,16 @@ import SourceControl from './sidebar/SourceControl';
 import RunDebug from './sidebar/RunDebug';
 import ImageSearch from './sidebar/ImageSearch';
 import Settings from './sidebar/Settings';
+import AnalyticsService from '../services/AnalyticsService';
 import './Sidebar.css';
 
-function Sidebar({ activeView, workspaceFolder, onOpenFile, onOpenFolder, explorerRefreshTrigger, theme, onToggleTheme, onLogout }) {
+function Sidebar({ activeView, workspaceFolder, onOpenFile, onOpenFolder, explorerRefreshTrigger, onExplorerRefresh, theme, onToggleTheme, onLogout, hasAiResponded }) {
   const renderView = () => {
+    // Track sidebar view changes
+    if (activeView) {
+      AnalyticsService.trackFeatureUsage('Sidebar', 'view_displayed', activeView);
+    }
+
     switch (activeView) {
       case 'explorer':
         return (
@@ -17,6 +23,8 @@ function Sidebar({ activeView, workspaceFolder, onOpenFile, onOpenFolder, explor
             onOpenFile={onOpenFile}
             onOpenFolder={onOpenFolder}
             refreshTrigger={explorerRefreshTrigger}
+            onRefresh={onExplorerRefresh}
+            hasAiResponded={hasAiResponded}
           />
         );
       case 'search':

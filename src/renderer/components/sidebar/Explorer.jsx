@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
   FiFolderPlus, FiFilePlus, FiRefreshCw, FiFolder, FiFile, FiChevronRight, FiChevronDown,
-  FiCode, FiImage, FiFileText, FiSettings 
+  FiCode, FiImage, FiFileText, FiSettings, FiAlertCircle
 } from 'react-icons/fi';
-import { 
-  SiJavascript, SiTypescript, SiReact, SiHtml5, SiCss3, SiJson, 
+import {
+  SiJavascript, SiTypescript, SiReact, SiHtml5, SiCss3, SiJson,
   SiPython, SiMarkdown, SiGit, SiNodedotjs
 } from 'react-icons/si';
 import './Explorer.css';
@@ -13,7 +13,7 @@ import './Explorer.css';
 const getFileIcon = (fileName) => {
   const ext = fileName.split('.').pop().toLowerCase();
   const iconProps = { size: 16 };
-  
+
   // Special files
   if (fileName === 'package.json' || fileName === 'package-lock.json') {
     return <SiNodedotjs {...iconProps} style={{ color: '#68a063' }} />;
@@ -24,7 +24,7 @@ const getFileIcon = (fileName) => {
   if (fileName === 'README.md') {
     return <SiMarkdown {...iconProps} style={{ color: '#083fa1' }} />;
   }
-  
+
   // Extension-based icons
   const iconMap = {
     // JavaScript/TypeScript
@@ -34,35 +34,35 @@ const getFileIcon = (fileName) => {
     'tsx': <SiReact {...iconProps} style={{ color: '#3178c6' }} />,
     'mjs': <SiJavascript {...iconProps} style={{ color: '#f7df1e' }} />,
     'cjs': <SiJavascript {...iconProps} style={{ color: '#f7df1e' }} />,
-    
+
     // Web
     'html': <SiHtml5 {...iconProps} style={{ color: '#e34c26' }} />,
     'css': <SiCss3 {...iconProps} style={{ color: '#264de4' }} />,
     'scss': <SiCss3 {...iconProps} style={{ color: '#c69' }} />,
     'sass': <SiCss3 {...iconProps} style={{ color: '#c69' }} />,
     'less': <SiCss3 {...iconProps} style={{ color: '#1d365d' }} />,
-    
+
     // Data
     'json': <SiJson {...iconProps} style={{ color: '#f7df1e' }} />,
     'xml': <FiCode {...iconProps} style={{ color: '#ff6600' }} />,
     'yaml': <FiFileText {...iconProps} style={{ color: '#cb171e' }} />,
     'yml': <FiFileText {...iconProps} style={{ color: '#cb171e' }} />,
     'toml': <FiFileText {...iconProps} style={{ color: '#9c4221' }} />,
-    
+
     // Python
     'py': <SiPython {...iconProps} style={{ color: '#3776ab' }} />,
     'pyc': <SiPython {...iconProps} style={{ color: '#646464' }} />,
-    
+
     // Markdown & Docs
     'md': <SiMarkdown {...iconProps} style={{ color: '#083fa1' }} />,
     'mdx': <SiMarkdown {...iconProps} style={{ color: '#f9ac00' }} />,
     'txt': <FiFileText {...iconProps} />,
-    
+
     // Config
     'env': <FiSettings {...iconProps} style={{ color: '#faf047' }} />,
     'config': <FiSettings {...iconProps} />,
     'conf': <FiSettings {...iconProps} />,
-    
+
     // Images
     'png': <FiImage {...iconProps} style={{ color: '#a074c4' }} />,
     'jpg': <FiImage {...iconProps} style={{ color: '#a074c4' }} />,
@@ -72,11 +72,11 @@ const getFileIcon = (fileName) => {
     'ico': <FiImage {...iconProps} style={{ color: '#a074c4' }} />,
     'webp': <FiImage {...iconProps} style={{ color: '#a074c4' }} />,
   };
-  
+
   return iconMap[ext] || <FiFile {...iconProps} />;
 };
 
-function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger }) {
+function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, onRefresh, hasAiResponded }) {
   const [folderTree, setFolderTree] = useState(null);
   const [expandedFolders, setExpandedFolders] = useState(new Set());
   const [creatingFolder, setCreatingFolder] = useState(false);
@@ -88,16 +88,16 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger })
     if (workspaceFolder) {
       loadFolder(workspaceFolder);
     }
-  }, [workspaceFolder]);  
+  }, [workspaceFolder]);
 
-  // Refresh when trigger changes
+  // Refresh when trigger changes (manual refresh fallback)
   useEffect(() => {
     if (workspaceFolder && refreshTrigger > 0) {
       console.log('🔄 Explorer refresh triggered:', refreshTrigger);
       loadFolder(workspaceFolder);
     }
   }, [refreshTrigger, workspaceFolder]);
-  
+
   // Debug: Log when folderTree changes
   useEffect(() => {
     if (folderTree) {
@@ -123,6 +123,79 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger })
     }
   }, [creatingFolder]);
 
+  // Unified refresh handler
+  const handleRefresh = useCallback(() => {
+    if (!workspaceFolder) return;
+    console.log('🔄 Explorer refreshing...');
+    loadFolder(workspaceFolder);
+
+    // Also trigger AI sync if available
+    if (onRefresh) {
+      console.log('🤖 Triggering AI file sync...');
+      onRefresh();
+    }
+  }, [workspaceFolder, onRefresh]);
+
+  // Effect to reload when workspaceFolder changes
+  useEffect(() => {
+    handleRefresh();
+  }, [workspaceFolder, handleRefresh]);
+
+  // Effect to reload when refresh trigger prop changes
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      console.log('🔄 Trigger prop changed:', refreshTrigger);
+      handleRefresh();
+    }
+  }, [refreshTrigger, handleRefresh]);
+
+  // Auto-refresh Explorer when files are added/removed via file watcher
+  useEffect(() => {
+    if (!workspaceFolder) return;
+
+    // Debounce refresh for file watcher events
+    let refreshTimeout;
+    const debouncedRefresh = () => {
+      clearTimeout(refreshTimeout);
+      refreshTimeout = setTimeout(() => {
+        console.log('🔄 Auto-refreshing explorer (watcher event)');
+        handleRefresh();
+      }, 500);
+    };
+
+    // Set up file watcher listeners
+    const handleFileChange = (path) => {
+      console.log('📁 File system change:', path);
+      debouncedRefresh();
+    };
+
+    // Register listeners
+    // Clean up old listeners first if any (though this effect runs on mount/unmount usually)
+    const cleanup = () => {
+      clearTimeout(refreshTimeout);
+    };
+
+    // We need to bind these to the current instance of debouncedRefresh
+    const onFileAdded = (p) => handleFileChange(p);
+    const onDirAdded = (p) => handleFileChange(p);
+    const onFileRemoved = (p) => handleFileChange(p);
+    const onDirRemoved = (p) => handleFileChange(p);
+
+    if (window.electronAPI?.watch) {
+      window.electronAPI.watch.onFileAdded(onFileAdded);
+      window.electronAPI.watch.onDirAdded(onDirAdded);
+      window.electronAPI.watch.onFileRemoved(onFileRemoved);
+      window.electronAPI.watch.onDirRemoved(onDirRemoved);
+    }
+
+    return () => {
+      cleanup();
+      // Ideally we would remove listeners here, but the API might not support it cleanly
+      // or we rely on the bridge to handle it. 
+      // Since we use closures, new listeners are registered on re-render if dependencies change.
+    };
+  }, [workspaceFolder, handleRefresh]);
+
   const loadFolder = async (path) => {
     console.log('📂 Loading folder:', path);
     const result = await window.electronAPI.fs.readDir(path);
@@ -130,8 +203,8 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger })
       console.log('✅ Folder loaded, items:', result.items.length);
       console.log('📄 Items:', result.items.map(i => i.name));
       // Force new object reference to trigger re-render
-      setFolderTree({ 
-        path, 
+      setFolderTree({
+        path,
         items: [...result.items] // Create new array reference
       });
       setExpandedFolders(new Set([path]));
@@ -221,7 +294,7 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger })
   const handleContextMenu = (e, item) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (item.isDirectory) {
       setCreatingFolder(true);
       setCreatingIn(item.path);
@@ -231,9 +304,9 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger })
 
   const renderTreeItem = (item, depth = 0) => {
     const isExpanded = expandedFolders.has(item.path);
-    
+
     return (
-      <div key={item.path}> 
+      <div key={item.path}>
         <div
           className="tree-item"
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -251,8 +324,8 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger })
           <span className="tree-label">{item.name}</span>
         </div>
         {creatingFolder && creatingIn === item.path && (
-          <form 
-            onSubmit={handleCreateFolder} 
+          <form
+            onSubmit={handleCreateFolder}
             className="new-folder-input-container"
             style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}
           >
@@ -276,91 +349,88 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger })
           </form>
         )}
         {isExpanded && item.children && item.children.length > 0 && item.children.map((child) => renderTreeItem(child, depth + 1))}
-      </div> 
+      </div>
     );
   };
 
+  if (!workspaceFolder) {
+    return (
+      <div className="explorer-empty">
+        <p>No folder open</p>
+        <button onClick={handleOpenFolder} className="explorer-open-btn">
+          Open Folder
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="explorer">
-      <div className="sidebar-header">
-        <span>Explorer</span>
-        <div className="sidebar-actions">
-          <button className="sidebar-action-button" onClick={handleOpenFolder} title="Open Folder">
-            <FiFolderPlus size={16} />
-          </button>
-          <button 
-            className="sidebar-action-button" 
-            onClick={handleNewFile}
-            disabled={!workspaceFolder}
-            title="New File"
+      <div className="explorer-header">
+        <span className="explorer-title">EXPLORER</span>
+        <div className="explorer-actions">
+          <button
+            className="action-btn"
+            onClick={handleRefresh}
+            title="Refresh Explorer"
           >
-            <FiFilePlus size={16} />
+            <FiRefreshCw size={14} />
+            {hasAiResponded && <span className="refresh-badge">Click me</span>}
           </button>
-          <button className="sidebar-action-button" onClick={() => workspaceFolder && loadFolder(workspaceFolder)} title="Refresh">
-            <FiRefreshCw size={16} />
+          <button className="action-btn" onClick={handleNewFile} title="New File">
+            <FiFilePlus size={14} />
+          </button>
+          <button className="action-btn" onClick={handleNewFolder} title="New Folder">
+            <FiFolderPlus size={14} />
           </button>
         </div>
       </div>
-      <div className="sidebar-content">
-        {!workspaceFolder && (
-          <div className="empty-state">
-            <p>No folder opened</p>
-            <button className="primary-button" onClick={handleOpenFolder}>
-              Open Folder
-            </button>
-          </div>
-        )}
-        {folderTree && (
-          <div className="tree-view">
-            <div className="workspace-folder-header">
-              <div className="workspace-folder-title">
-                <FiFolder size={16} />
-                <span>{folderTree.path.split('/').pop()}</span>
-              </div>
-              <button 
-                className="new-folder-button" 
-                onClick={handleNewFolder}
-                title="New Folder"
-              >
-                <FiFolderPlus size={14} />
-              </button>
-            </div>
-            {creatingFolder && creatingIn === workspaceFolder && (
-              <form 
-                onSubmit={handleCreateFolder} 
-                className="new-folder-input-container"
-                style={{ paddingLeft: '20px' }}
-                ref={inputRef}
-              >
-                <span className="tree-icon">
-                  <FiFolder size={16} />
-                </span>
-                <input
-                  type="text"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      e.preventDefault();
-                      handleCancelCreateFolder();
-                    }
-                  }}
-                  placeholder="Folder name"
-                  className="new-folder-input"
-                  autoFocus
-                />
-              </form>
-            )}
-            {folderTree.items && folderTree.items.length > 0 ? (
-              folderTree.items.map((item) => renderTreeItem(item, 0))
-            ) : (
-              <div style={{ padding: '20px', color: '#888', fontSize: '12px' }}>
+
+      {hasAiResponded && (
+        <div className="explorer-refresh-tip">
+          <FiAlertCircle size={12} className="tip-icon" />
+          <span>Click refresh if AI files are missing</span>
+        </div>
+      )}
+
+      <div className="explorer-content">
+        {folderTree ? (
+          <div className="folder-tree">
+            {/* Render root level files directly for now to keep it simple */}
+            {folderTree.items && folderTree.items.map((item) => renderTreeItem(item, 0))}
+            {(!folderTree.items || folderTree.items.length === 0) && (
+              <div style={{ padding: '20px', color: '#888', fontSize: '12px', textAlign: 'center' }}>
                 No files in this folder
               </div>
             )}
           </div>
+        ) : (
+          <div className="loading">Loading...</div>
         )}
       </div>
+
+      {creatingFolder && (
+        <div className="new-folder-modal-overlay">
+          <div className="new-folder-modal" ref={inputRef}>
+            <h3>Create New Folder</h3>
+            <input
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="Folder name"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateFolder();
+                if (e.key === 'Escape') setCreatingFolder(false);
+              }}
+            />
+            <div className="modal-actions">
+              <button onClick={() => setCreatingFolder(false)}>Cancel</button>
+              <button onClick={handleCreateFolder} disabled={!newFolderName}>Create</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

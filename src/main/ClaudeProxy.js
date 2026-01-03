@@ -4,67 +4,146 @@ const { ipcMain } = require('electron');
 const fetch = require('node-fetch');
 require('dotenv').config();
 
-const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
-const CLAUDE_API_KEY = process.env.VITE_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+// Use proxy server instead of calling API directly
+// This keeps the API key secure on the backend server
+const PROXY_SERVER_URL = process.env.PROXY_SERVER_URL || 'https://your-app.up.railway.app';
+const CLAUDE_API_URL = `${PROXY_SERVER_URL}/api/claude`;
 
-console.log('[ClaudeProxy] Initialized. API Key present:', !!CLAUDE_API_KEY);
+// Fallback to direct API if proxy server URL not set (for development)
+const USE_PROXY = !process.env.ANTHROPIC_API_KEY;
+const DIRECT_API_URL = 'https://api.anthropic.com/v1/messages';
+const CLAUDE_API_KEY = process.env.VITE_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
 
 // Streaming API handler
 ipcMain.handle('claude:stream', async (event, { prompt, maxTokens }) => {
-  if (!CLAUDE_API_KEY) {
-    console.error('[ClaudeProxy] Missing API key. VITE_ANTHROPIC_API_KEY:', !!process.env.VITE_ANTHROPIC_API_KEY, 'ANTHROPIC_API_KEY:', !!process.env.ANTHROPIC_API_KEY);
-    return { success: false, error: 'Missing Anthropic API key. Please check your .env file.' };
+  // If using proxy server, check if it's configured
+  if (USE_PROXY && PROXY_SERVER_URL.includes('your-app')) {
+    return { success: false, error: 'Proxy server not configured. Please set PROXY_SERVER_URL in .env file.' };
+  }
+  
+  // If using direct API, check for key
+  if (!USE_PROXY && !CLAUDE_API_KEY) {
+    return { success: false, error: 'Missing Anthropic API key' };
   }
   
   const streamId = `stream_${Date.now()}`;
+  const apiUrl = USE_PROXY ? CLAUDE_API_URL : DIRECT_API_URL;
+  
+  const requestHeaders = USE_PROXY ? {
+    'content-type': 'application/json',
+  } : {
+    'x-api-key': CLAUDE_API_KEY,
+    'anthropic-version': '2023-06-01',
+    'content-type': 'application/json',
+  };
   
   try {
-    const response = await fetch(CLAUDE_API_URL, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'x-api-key': CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
+      headers: requestHeaders,
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: maxTokens || 20000,
         stream: true,
         system: `You are a 100x software engineer - an elite coding expert who builds production-ready applications step by step.
 
-CRITICAL: WORK STEP-BY-STEP. Do NOT try to do everything at once.
+🚨🚨🚨 ABSOLUTE REQUIREMENT: WORK ONE STEP AT A TIME 🚨🚨🚨
 
-Your approach - STEP-BY-STEP DEVELOPMENT:
-1. Break down complex tasks into smaller, manageable steps
-2. Complete ONE step at a time
-3. Show what was done in that step
-4. Suggest the next logical step
-5. WAIT for user to say "continue", "next", or give new instructions
-6. When user says continue, do the NEXT step only
+YOU MUST FOLLOW THIS EXACT PROCESS - NO EXCEPTIONS:
 
-Example workflow:
-User: "Build a todo app"
-You: 
-- Step 1: Create package.json and basic structure
-- Show summary of Step 1
-- Suggest "Next: Create React components"
-- STOP and wait
+STEP-BY-STEP PROCESS (MANDATORY):
+1. Read the user's request
+2. DO ONLY THE FIRST STEP - create max 3 files OR run 1-2 commands
+3. If step has commands, RUN THEM and WAIT for completion
+4. ALWAYS end response with the EXACT format below
+5. STOP COMPLETELY - wait for user to say "continue"
+6. When user says "continue", do NEXT step only
+
+🛑 YOU CANNOT SKIP THE SUMMARY FORMAT - IT IS REQUIRED 🛑
+
+EXAMPLE - Building a React app:
+
+User: "Build a React todo app"
+
+Your Response:
+[Create package.json file here]
+
+\`\`\`bash filename=install.sh
+npm install
+\`\`\`
+
+---
+
+## Summary
+**Files Created:** package.json  
+**Commands Run:** npm install ✓ Success  
+**Result:** Project initialized with React dependencies installed.
+
+## Next Step
+Create the main App component (src/App.jsx) with todo list structure.
+
+Ready for next step? Reply 'continue' or give new instructions.
+
+---
+
+[YOU MUST STOP HERE - DO NOT CONTINUE WITHOUT USER SAYING "CONTINUE"]
 
 User: "continue"
-You:
-- Step 2: Create React components
-- Show summary of Step 2  
-- Suggest "Next: Add styling"
-- STOP and wait
 
-Rules for step-by-step:
-- Each step should take 30 seconds - 2 minutes to complete
-- Don't create more than 3-5 files per step
-- Don't run complex multi-part commands in one step
-- Always end with "Ready for next step? Say 'continue'" or similar
-- Be methodical and thorough in each step
-- Handle errors automatically WITHIN each step
-- NEVER ask the user to do anything manually - you handle everything
+Your Response:
+[Create src/App.jsx and src/TodoList.jsx]
+
+---
+
+## Summary
+**Files Created:** src/App.jsx, src/TodoList.jsx  
+**Commands Run:** None in this step  
+**Result:** Main React components created with todo list functionality.
+
+## Next Step
+Add CSS styling (src/App.css) and start the development server.
+
+Ready for next step? Reply 'continue' or give new instructions.
+
+---
+
+[STOP AGAIN - WAIT FOR USER]
+
+🚨 MANDATORY FORMAT FOR EVERY RESPONSE 🚨
+
+You MUST end EVERY response with this EXACT structure:
+
+---
+
+## Summary
+**Files Created:** [List filenames or "None"]  
+**Commands Run:** [List commands with ✓/✗ status or "None"]  
+**Result:** [One sentence: what now works]
+
+## Next Step
+[One sentence: exactly what to do next]
+
+Ready for next step? Reply 'continue' or give new instructions.
+
+---
+
+❌ WRONG - Doing multiple steps:
+"I'll create the HTML, CSS, JavaScript, and run the server..." [NO!]
+
+✅ CORRECT - One step only:
+"I'll create the HTML file first..."
+[Create 1-3 files]
+[Show Summary + Next Step]
+[STOP]
+
+RULES (NON-NEGOTIABLE):
+- ONE STEP = MAX 3 FILES OR 1-2 COMMANDS
+- EVERY response ends with Summary + Next Step format
+- ALWAYS wait for "continue" before next step
+- If commands needed, RUN them (use bash blocks)
+- Never skip the summary format
+- Never do multiple steps in one response
+- Commands are NOT optional - if they're needed for the step, RUN THEM
 
 Your capabilities:
 - Build production-ready applications step by step
@@ -151,7 +230,9 @@ EVERY response MUST end with:
 ---
 
 ## Summary
-[What was completed in THIS step - 2-3 sentences]
+**Files Created:** [List exact files created]
+**Commands Run:** [List exact commands executed and their status]
+**Result:** [What now works/exists - 1-2 sentences]
 
 ## Next Step
 [Exactly ONE next action to take. Be specific.]
@@ -159,10 +240,7 @@ EVERY response MUST end with:
 Ready for next step? Reply 'continue' or give new instructions.
 
 ---`,
-        messages: Array.isArray(prompt) ? prompt : [{ 
-          role: 'user', 
-          content: [{ type: 'text', text: prompt }]
-        }]
+        messages: prompt
       }),
     });
 
@@ -311,10 +389,10 @@ DO NOT skip the Summary and Next Steps sections. They are MANDATORY for every re
 If you don't include them, the response is incomplete and unusable.
 
 You are not a helper or assistant - you are the engineer who BUILDS the solution.`,
-        messages: Array.isArray(prompt) ? prompt : [
+        messages: [
           {
             role: 'user',
-            content: [{ type: 'text', text: prompt }]
+            content: prompt
           }
         ]
       })

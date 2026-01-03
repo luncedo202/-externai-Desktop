@@ -89,7 +89,7 @@
         ],
         "mac": {
             "category": "public.app-category.developer-tools",
-            "icon": "assets/ExternAI-logo.png",
+            "icon": "assets/externai-logo.png",
             "target": [
                 {
                     "target": "dmg",
@@ -127,7 +127,7 @@
             "title": "ExternAI ${version}"
         },
         "win": {
-            "icon": "assets/ExternAI-logo.png",
+            "icon": "assets/externai-logo.png",
             "target": [
                 {
                     "target": "nsis",
@@ -154,7 +154,7 @@
             "shortcutName": "ExternAI"
         },
         "linux": {
-            "icon": "assets/ExternAI-logo.png",
+            "icon": "assets/externai-logo.png",
             "category": "Development",
             "target": [
                 {

@@ -1,5 +1,6 @@
 .app {
   display: flex;
+  flex-direction: column;
   width: 100vw;
   height: 100vh;
   background: var(--vscode-bg);
@@ -7,9 +8,17 @@
   overflow: hidden;
 }
 
+.workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
 .main-content {
   display: flex;
   flex-direction: column;
   flex: 1;
   overflow: hidden;
+  position: relative;
 }

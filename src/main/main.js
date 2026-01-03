@@ -197,16 +197,6 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
-// IPC handler to trigger open folder dialog
-ipcMain.on('menu-trigger-open-folder', async (event) => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory', 'createDirectory'],
-  });
-  if (!result.canceled) {
-    mainWindow.webContents.send('menu-open-folder', result.filePaths[0]);
-  }
-});
-
 // File System Operations
 ipcMain.handle('fs:readFile', async (event, filePath) => {
   try {

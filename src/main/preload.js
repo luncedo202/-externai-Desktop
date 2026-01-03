@@ -54,7 +54,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onToggleSidebar: (callback) => ipcRenderer.on('menu-toggle-sidebar', callback),
     onNewTerminal: (callback) => ipcRenderer.on('menu-new-terminal', callback),
     onSplitTerminal: (callback) => ipcRenderer.on('menu-split-terminal', callback),
-    triggerOpenFolder: () => ipcRenderer.send('menu-trigger-open-folder'),
   },
 
   // Output Channel

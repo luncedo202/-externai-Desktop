@@ -8,13 +8,11 @@ import ProblemsPanel from './panels/ProblemsPanel';
 import DebugConsole from './panels/DebugConsole';
 import './Panel.css';
 
-function Panel({ 
-  terminals, 
-  onNewTerminal, 
+function Panel({
+  terminals,
+  onNewTerminal,
   onCloseTerminal,
   workspaceFolder,
-  outputLogs = [],
-  diagnostics = [],
   debugLogs = [],
   onClearOutput,
   onClearDiagnostics,
@@ -38,7 +36,7 @@ function Panel({
         console.error('Error killing terminal:', error);
       }
     }
-    
+
     // Cleanup refs
     if (terminalInstances.current[terminalId]) {
       terminalInstances.current[terminalId].dispose();
@@ -47,7 +45,7 @@ function Panel({
     delete terminalRefs.current[terminalId];
     delete fitAddons.current[terminalId];
     delete backendTerminalIds.current[terminalId];
-    
+
     // Close in parent component
     if (onCloseTerminal) {
       onCloseTerminal(terminalId);
@@ -67,7 +65,7 @@ function Panel({
 
       const term = new XTerm({
         cursorBlink: true,
-        fontSize: 14,
+        fontSize: 10,
         fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
         theme: theme === 'light' ? {
           background: '#ffffff',
@@ -108,7 +106,7 @@ function Panel({
 
       // Create terminal backend
       const result = await window.electronAPI.terminal.create(workspaceFolder);
-      
+
       if (!result.success) {
         // Show error message in terminal
         term.writeln('\x1b[1;31mTerminal Error:\x1b[0m ' + result.error);
@@ -117,11 +115,11 @@ function Panel({
         term.writeln('The app will work without terminal, but you won\'t be able to run commands.');
         return;
       }
-      
+
       if (result.success) {
         // Store the backend terminal ID
         backendTerminalIds.current[terminalId] = result.terminalId;
-        
+
         // Handle terminal input
         term.onData((data) => {
           window.electronAPI.terminal.write(result.terminalId, data);
@@ -190,7 +188,7 @@ function Panel({
                 onClick={() => setActiveTerminal(terminal.id)}
               >
                 <span className="terminal-tab-name">{terminal.name}</span>
-                <span 
+                <span
                   className="terminal-close-button"
                   onClick={(e) => {
                     e.stopPropagation();

@@ -243,3 +243,27 @@
 .welcome-button:hover {
   background: var(--vscode-hover);
 }
+
+/* Plan Viewer in Editor Area */
+.plan-viewer-container {
+  background: var(--vscode-editor-bg);
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.plan-viewer-container::-webkit-scrollbar {
+  width: 10px;
+}
+
+.plan-viewer-container::-webkit-scrollbar-track {
+  background: var(--vscode-scrollbar-track);
+}
+
+.plan-viewer-container::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbar-thumb);
+  border-radius: 5px;
+}
+
+.plan-viewer-container::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbar-thumb-hover);
+}

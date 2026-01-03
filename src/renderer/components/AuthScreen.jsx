@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { FiMail, FiLock, FiUser, FiAlertCircle } from 'react-icons/fi';
 import FirebaseService from '../services/FirebaseService';
-import logo from '../assets/ExternAI-logo.png';
 import './AuthScreen.css';
 
 function AuthScreen({ onAuthSuccess }) {
@@ -59,10 +58,7 @@ function AuthScreen({ onAuthSuccess }) {
       <div className="auth-container">
         <div className="auth-content">
           <div className="auth-info">
-            <div className="auth-header">
-              <img src={logo} alt="ExternAI Logo" className="auth-logo" />
-              <h1>ExternAI</h1>
-            </div>
+            <h1>ExternAI</h1>
             <p className="auth-description">
               ExternAI is a powerful desktop IDE with advanced AI capabilities. 
               Build websites, mobile apps, and games with intelligent code generation, real-time debugging assistance, 

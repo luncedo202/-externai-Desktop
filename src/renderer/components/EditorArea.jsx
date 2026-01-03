@@ -3,23 +3,28 @@ import Editor from '@monaco-editor/react';
 import { FiX, FiMonitor, FiCode } from 'react-icons/fi';
 import './EditorArea.css';
 
-function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onContentChange, onOpenFolder, theme, onPreviewClick }) {
+function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onContentChange, onOpenFolder, theme, onPreviewClick, onCursorChange, pendingPlan }) {
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('http://localhost:3000');
-  const [fontSize, setFontSize] = useState(14);
+  const [fontSize, setFontSize] = useState(12);
   const [tabSize, setTabSize] = useState(2);
   const currentFile = openFiles.find((f) => f.id === activeFile);
 
+  // Debug logging for pendingPlan
+  useEffect(() => {
+    console.log('📺 [EditorArea] pendingPlan changed:', pendingPlan);
+  }, [pendingPlan]);
+
   // Load editor settings from localStorage
   useEffect(() => {
-    const savedFontSize = parseInt(localStorage.getItem('editorFontSize')) || 14;
+    const savedFontSize = parseInt(localStorage.getItem('editorFontSize')) || 12;
     const savedTabSize = parseInt(localStorage.getItem('editorTabSize')) || 2;
     setFontSize(savedFontSize);
     setTabSize(savedTabSize);
 
     // Listen for storage changes to update in real-time
     const handleStorageChange = () => {
-      setFontSize(parseInt(localStorage.getItem('editorFontSize')) || 14);
+      setFontSize(parseInt(localStorage.getItem('editorFontSize')) || 12);
       setTabSize(parseInt(localStorage.getItem('editorTabSize')) || 2);
     };
 
@@ -31,6 +36,28 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
     if (currentFile) {
       onContentChange(currentFile.id, value);
     }
+  };
+
+  const handleEditorDidMount = (editor, monaco) => {
+    // Initial position update
+    const position = editor.getPosition();
+    if (position && onCursorChange) {
+      onCursorChange({ line: position.lineNumber, column: position.column });
+    }
+
+    editor.onDidChangeCursorPosition((e) => {
+      if (onCursorChange) {
+        onCursorChange({ line: e.position.lineNumber, column: e.position.column });
+      }
+    });
+
+    // Also update when focus changes as that might indicate a switch back to this editor
+    editor.onDidFocusEditorText(() => {
+      const position = editor.getPosition();
+      if (position && onCursorChange) {
+        onCursorChange({ line: position.lineNumber, column: position.column });
+      }
+    });
   };
 
   const handleCreateProject = async (projectType) => {
@@ -52,7 +79,7 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
     }
     setShowPreview(!showPreview);
   };
-  
+
   // Determine Monaco theme based on app theme
   const monacoTheme = theme === 'dark' ? 'vs-dark' : 'light';
 
@@ -108,10 +135,11 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
             value={currentFile.content}
             onChange={handleEditorChange}
             theme={monacoTheme}
-            loading={<div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--vscode-fg)'}}>Loading editor...</div>}
+            onMount={handleEditorDidMount}
+            loading={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--vscode-fg)' }}>Loading editor...</div>}
             options={{
               fontSize: fontSize,
-              fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
+              fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, 'Courier New', monospace",
               minimap: { enabled: true },
               scrollBeyondLastLine: false,
               automaticLayout: true,
