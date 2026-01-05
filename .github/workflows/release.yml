@@ -24,7 +24,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 18
           cache: 'npm'
 
       - name: Setup Python (for node-gyp)
@@ -36,11 +36,18 @@ jobs:
         if: matrix.os == 'windows-latest'
         uses: microsoft/setup-msbuild@v2
 
+      - name: Install Windows Build Tools (Windows)
+        if: matrix.os == 'windows-latest'
+        run: npm install --global windows-build-tools@5.2.2 || true
+        continue-on-error: true
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Rebuild native modules
-        run: npm run postinstall
+      - name: Rebuild native modules for Electron
+        shell: bash
+        run: |
+          npx electron-rebuild -f -w node-pty || true
         continue-on-error: true
 
       - name: Build Renderer
