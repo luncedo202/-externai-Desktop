@@ -11,8 +11,9 @@ permissions:
 jobs:
   release:
     runs-on: ${{ matrix.os }}
-
+    
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
 
@@ -29,20 +30,13 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build/Release Electron App
+      - name: Build and Release
         uses: samuelmeuli/action-electron-builder@v1
         with:
-          # GitHub token, automatically provided by the Action
-          # (no need to create one yourself)
           github_token: ${{ secrets.GITHUB_TOKEN }}
-
-          # If the commit is tagged with a version (e.g. "v1.0.0"),
-          # release the app after building
           release: true
-
-          # macOS specific options
-          mac_stack: xcode-15.0
-          
-          # Linux specific options
-          # fpm is used to build .deb and .rpm packages
-          # (already installed on ubuntu-latest)
+          # Use the build scripts defined in our package.json
+          build_script_name: build
+        env:
+          # Explicitly provide token for publishing
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
