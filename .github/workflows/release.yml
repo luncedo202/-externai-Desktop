@@ -37,6 +37,7 @@ jobs:
           release: true
           # Use the build scripts defined in our package.json
           build_script_name: build
+          # Disable DMG compression to avoid hdiutil issues on some CI runners
+          args: "-c.mac.dmg.format=RDCX"
         env:
-          # Explicitly provide token for publishing
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
