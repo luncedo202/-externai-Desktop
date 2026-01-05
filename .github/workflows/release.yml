@@ -24,7 +24,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: 'npm'
 
       - name: Setup Python (for node-gyp)
@@ -65,7 +65,5 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: bash
         run: npx electron-builder --win --x64 --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
