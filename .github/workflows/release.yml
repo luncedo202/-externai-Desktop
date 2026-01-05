@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, windows-latest]
 
     steps:
       - name: Check out git repository
@@ -24,7 +24,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 18
           cache: 'npm'
 
       - name: Setup Python (for node-gyp)
@@ -38,9 +38,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          npm_config_build_from_source: true
 
       - name: Rebuild native modules
-        run: npm run postinstall
+        shell: bash
+        run: npm run postinstall || true
         continue-on-error: true
 
       - name: Build Renderer
@@ -60,12 +63,9 @@ jobs:
 
       - name: Build Electron App (Windows)
         if: matrix.os == 'windows-latest'
-        run: npx electron-builder --win --publish always
+        shell: bash
+        run: npx electron-builder --win --x64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build Electron App (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: npx electron-builder --linux --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
