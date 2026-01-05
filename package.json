@@ -124,7 +124,8 @@
                     "path": "/Applications"
                 }
             ],
-            "title": "ExternAI ${version}"
+            "title": "ExternAI ${version}",
+            "format": "UDZO"
         },
         "win": {
             "icon": "assets/externai-logo.png",

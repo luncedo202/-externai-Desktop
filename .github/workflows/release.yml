@@ -27,17 +27,29 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Visual Studio Build Tools (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: microsoft/setup-msbuild@v2
+
       - name: Install dependencies
         run: npm install
+
+      - name: Rebuild native modules
+        run: npm run postinstall
+
+      - name: Build Renderer
+        run: npm run build
 
       - name: Build and Release
         uses: samuelmeuli/action-electron-builder@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           release: true
-          # Use the build scripts defined in our package.json
-          build_script_name: build
-          # Disable DMG compression to avoid hdiutil issues on some CI runners
-          args: "-c.mac.dmg.format=RDCX"
+          skip_build: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
