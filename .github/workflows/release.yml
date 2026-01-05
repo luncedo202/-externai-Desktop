@@ -47,6 +47,7 @@ jobs:
         run: npm run build
 
       - name: Verify build output
+        shell: bash
         run: |
           echo "Checking build directory..."
           ls -la build/ || echo "Build directory missing!"
