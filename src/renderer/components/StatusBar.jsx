@@ -2,7 +2,7 @@ import React from 'react';
 import { FiGitBranch, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 import './StatusBar.css';
 
-function StatusBar({ activeFile, workspaceFolder, cursorPosition }) {
+function StatusBar({ activeFile, workspaceFolder, cursorPosition, onUpgradeClick }) {
   return (
     <div className="status-bar">
       <div className="status-left">
@@ -12,13 +12,9 @@ function StatusBar({ activeFile, workspaceFolder, cursorPosition }) {
               <FiGitBranch size={14} />
               <span>main</span>
             </div>
-            <div className="status-item">
-              <FiCheckCircle size={14} />
-              <span>0</span>
-            </div>
-            <div className="status-item">
-              <FiAlertCircle size={14} />
-              <span>0</span>
+            <div className="status-item upgrade-btn" onClick={onUpgradeClick}>
+              <FiCheckCircle size={14} style={{ color: '#fbbf24' }} />
+              <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>UPGRADE</span>
             </div>
           </>
         )}

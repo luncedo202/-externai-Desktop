@@ -1,130 +1,45 @@
-# Build and Release Workflow
-# This workflow builds and publishes releases for ExternAI Desktop application
-# 
-# Permissions: This workflow requires write access to create releases and publish packages.
-# The workflow uses GITHUB_TOKEN by default. To use a Personal Access Token (PAT) instead,
-# create a secret named RELEASE_PAT with appropriate permissions and uncomment the relevant
-# lines in the Publish step.
-#
-# Triggers: Only runs on version tag pushes (v*.*.*) or manual workflow dispatch to prevent
-# accidental releases from forks or pull requests.
-
-name: Build and Release
-
-# Explicit permissions required for creating releases and publishing packages
-permissions:
-  contents: write
+name: Build/Release
 
 on:
   push:
     tags:
-      - 'v*'  # Triggers on version tags like v1.0.0
-  workflow_dispatch:  # Allows manual triggering of the workflow
+      - 'v*'
 
 jobs:
-  build-mac:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - run: npm install
-      - run: echo "VITE_ANTHROPIC_API_KEY=placeholder" > .env
-      - run: npm run build || echo "Build skipped"
-      - run: npm run dist:mac
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-builds
-          path: |
-            dist/*.dmg
-            dist/*.zip
-            dist/*.yml
-  
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v2
-      - name: Install dependencies with Windows fixes
-        shell: pwsh
-        run: |
-          # Clean install to avoid EPERM and cached issues
-          if (Test-Path node_modules) { Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue }
-          if (Test-Path package-lock.json) { Remove-Item -Force package-lock.json }
-          npm cache clean --force
-          # Install all dependencies (node-pty 1.0.0 uses prebuilt binaries)
-          npm install
-      - run: echo "VITE_ANTHROPIC_API_KEY=placeholder" | Out-File -FilePath .env -Encoding utf8
-        shell: pwsh
-      - run: npm run build
-        continue-on-error: true
-      - run: npm run dist:win
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: dir dist
-        shell: cmd
-        if: always()
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: windows-builds
-          path: |
-            dist/*.exe
-            dist/*.yml
-          if-no-files-found: warn
-  
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential python3 libx11-dev libxkbfile-dev libsecret-1-dev
-      - run: npm install
-      - run: echo "VITE_ANTHROPIC_API_KEY=placeholder" > .env
-      - run: npm run build
-        continue-on-error: true
-      - run: npm run dist:linux
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: ls -la dist/
-        if: always()
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: linux-builds
-          path: |
-            dist/*.AppImage
-            dist/*.deb
-            dist/*.rpm
-            dist/*.yml
-          if-no-files-found: warn
-  
   release:
-    needs: [build-mac, build-windows, build-linux]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Check out git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
         with:
-          path: artifacts
-      - uses: softprops/action-gh-release@v1
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build/Release Electron App
+        uses: samuelmeuli/action-electron-builder@v1
         with:
-          files: artifacts/**/*
-          draft: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GitHub token, automatically provided by the Action
+          # (no need to create one yourself)
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+          # If the commit is tagged with a version (e.g. "v1.0.0"),
+          # release the app after building
+          release: true
+
+          # macOS specific options
+          mac_stack: xcode-15.0
+          
+          # Linux specific options
+          # fpm is used to build .deb and .rpm packages
+          # (already installed on ubuntu-latest)

@@ -46,6 +46,7 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/claude', claudeRoutes);
+app.use('/api/payment', require('./routes/payment'));
 
 // Error handler
 app.use((err, req, res, next) => {

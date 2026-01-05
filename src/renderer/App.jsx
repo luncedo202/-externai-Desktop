@@ -8,6 +8,7 @@ import AIAssistant from './components/AIAssistant';
 import AuthScreen from './components/AuthScreen';
 import FirebaseService from './services/FirebaseService';
 import AnalyticsService from './services/AnalyticsService';
+import PricingPlans from './components/PricingPlans';
 import './App.css';
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
   const [diagnostics, setDiagnostics] = useState([]);
   const [debugLogs, setDebugLogs] = useState([]);
   const [hasAiResponded, setHasAiResponded] = useState(false);
+  const [showPricing, setShowPricing] = useState(false);
   const aiAssistantRef = useRef(null);
 
   // Initialize analytics and check authentication on app start
@@ -419,7 +421,14 @@ function App() {
         activeFile={openFiles.find((f) => f.id === activeFile)}
         workspaceFolder={workspaceFolder}
         cursorPosition={cursorPosition}
+        onUpgradeClick={() => setShowPricing(true)}
       />
+      {showPricing && (
+        <PricingPlans
+          onClose={() => setShowPricing(false)}
+          userEmail={currentUser?.email}
+        />
+      )}
     </div>
   );
 }
