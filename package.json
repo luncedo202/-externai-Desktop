@@ -1,7 +1,7 @@
 {
     "$schema": "https://json.schemastore.org/package.json",
     "name": "externai",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "description": "ExternAI - AI-Powered Development Environment for web, mobile, and game development",
     "main": "src/main/main.js",
     "scripts": {
@@ -92,13 +92,6 @@
             "icon": "assets/externai-logo.png",
             "target": [
                 {
-                    "target": "dmg",
-                    "arch": [
-                        "x64",
-                        "arm64"
-                    ]
-                },
-                {
                     "target": "zip",
                     "arch": [
                         "x64",
@@ -110,22 +103,6 @@
             "gatekeeperAssess": false,
             "entitlements": "assets/entitlements.mac.plist",
             "entitlementsInherit": "assets/entitlements.mac.plist"
-        },
-        "dmg": {
-            "contents": [
-                {
-                    "x": 130,
-                    "y": 220
-                },
-                {
-                    "x": 410,
-                    "y": 220,
-                    "type": "link",
-                    "path": "/Applications"
-                }
-            ],
-            "title": "ExternAI ${version}",
-            "format": "UDZO"
         },
         "win": {
             "icon": "assets/externai-logo.png",
