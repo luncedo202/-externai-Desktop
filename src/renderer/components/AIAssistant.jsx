@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader } from 'react-icons/fi';
-import { RiRobot2Line } from 'react-icons/ri';
 import ClaudeService from '../services/ClaudeService';
 import AnalyticsService from '../services/AnalyticsService';
 import './AIAssistant.css';
@@ -143,16 +142,7 @@ const WORKSPACE_SCAN_DELAY = 500; // ms before scanning workspace
 const STREAM_BUFFER_CHECK_DELAY = 50; // ms when waiting for content
 const DISPLAY_COMPLETION_CHECK_DELAY = 100; // ms when waiting for display to finish
 
-const AIAssistant = forwardRef(({
-  onClose,
-  workspaceFolder,
-  onOpenFolder,
-  onFileCreated,
-  onFirstResponse,
-  onAddTask,
-  onUpdateTask,
-  explorerRefreshTrigger
-}, ref) => {
+const AIAssistant = forwardRef(({ onClose, workspaceFolder, onOpenFolder, onFileCreated }, ref) => {
   // Load messages from localStorage if available, but reset if workspaceFolder changes
   const defaultWelcome = {
     role: 'assistant',
@@ -327,6 +317,20 @@ const AIAssistant = forwardRef(({
     // Generate unique message ID
     const userMessageId = Date.now();
 
+    // Prevent duplicate from React StrictMode double-invocation or rapid double submit
+    // Check if this exact message was just submitted (within 500ms)
+    if (
+      lastSubmittedMessageRef.current &&
+      lastSubmittedMessageRef.current.content === messageContent &&
+      Date.now() - lastSubmittedMessageRef.current.timestamp < 500
+    ) {
+      console.log('🛑 Duplicate message blocked (StrictMode or rapid double-invoke)');
+      return;
+    }
+
+    // Track this submission
+    lastSubmittedMessageRef.current = { content: messageContent, timestamp: Date.now() };
+
     const userMessageObj = { id: userMessageId, role: 'user', content: messageContent };
 
     // Add message to state
@@ -481,11 +485,6 @@ const AIAssistant = forwardRef(({
             : msg
         ));
 
-        // Notify parent that AI has responded
-        if (onFirstResponse) {
-          onFirstResponse();
-        }
-
         const assistantMessage = {
           id: streamingMessageId,
           role: 'assistant',
@@ -495,39 +494,40 @@ const AIAssistant = forwardRef(({
         conversationHistory.current.push(assistantMessage);
 
         if (workspaceFolder) {
-          try {
-            console.log('🤖 AI response received - processing automatically...');
-            const codeBlocks = extractCodeBlocks(response.message);
-            const commands = extractCommands(response.message);
+          setTimeout(async () => {
+            try {
+              console.log('🤖 AI response received - processing automatically...');
+              const codeBlocks = extractCodeBlocks(response.message);
+              const commands = extractCommands(response.message);
 
-            console.log(`📄 Found ${codeBlocks.length} code blocks to create`);
-            console.log(`⚡ Found ${commands.length} commands to execute`);
+              console.log(`📄 Found ${codeBlocks.length} code blocks to create`);
+              console.log(`⚡ Found ${commands.length} commands to execute`);
 
-            // STEP 1: Create files FIRST (so commands can use them)
-            if (codeBlocks.length > 0) {
-              console.log('📁 Creating files first...');
-              // We await this now instead of using setTimeout
-              await handleCreateFilesAutomatically(response.message, assistantMessage.id);
-              console.log('✅ Files created successfully');
+              // STEP 1: Create files FIRST (so commands can use them)
+              if (codeBlocks.length > 0) {
+                console.log('📁 Creating files first...');
+                await handleCreateFilesAutomatically(response.message, assistantMessage.id);
+                console.log('✅ Files created successfully');
 
-              // Wait a bit for filesystem to sync
-              await new Promise(resolve => setTimeout(resolve, 500));
+                // Wait a bit for filesystem to sync
+                await new Promise(resolve => setTimeout(resolve, 500));
+              }
+
+              // STEP 2: Execute commands AFTER files are created
+              if (commands.length > 0) {
+                console.log('⚡ Executing commands now...');
+                await executeCommandsAutomatically(response.message);
+                console.log('✅ Commands executed successfully');
+              }
+
+              if (codeBlocks.length === 0 && commands.length === 0) {
+                console.log('ℹ️ No files or commands to process - AI provided explanation only');
+              }
+            } catch (error) {
+              console.error('❌ Error processing response:', error);
+              console.error('❌ Error stack:', error.stack);
             }
-
-            // STEP 2: Execute commands AFTER files are created
-            if (commands.length > 0) {
-              console.log('⚡ Executing commands now...');
-              await executeCommandsAutomatically(response.message);
-              console.log('✅ Commands executed successfully');
-            }
-
-            if (codeBlocks.length === 0 && commands.length === 0) {
-              console.log('ℹ️ No files or commands to process - AI provided explanation only');
-            }
-          } catch (error) {
-            console.error('❌ Error processing response:', error);
-            console.error('❌ Error stack:', error.stack);
-          }
+          }, WORKSPACE_SCAN_DELAY);
         }
 
         // Update subscription status after successful message
@@ -595,22 +595,12 @@ const AIAssistant = forwardRef(({
     }
   };
 
-  // Expose methods to parent via ref
+  // Expose sendMessage method to parent via ref
   useImperativeHandle(ref, () => ({
     sendMessage: (messageText) => {
       sendMessage(messageText, []);
-    },
-    syncFiles: async () => {
-      console.log('🔄 Syncing files from chat history...');
-      // Look at the last few messages for code blocks
-      const recentMessages = messages.slice(-5);
-      for (const msg of recentMessages) {
-        if (msg.role === 'assistant') {
-          await handleCreateFilesAutomatically(msg.content, msg.id);
-        }
-      }
     }
-  }), [messages, workspaceFolder]);
+  }));
 
   // Handle stopping AI generation and command execution
   const handleStopGeneration = () => {
@@ -664,43 +654,25 @@ const AIAssistant = forwardRef(({
     }
     const messageText = input.trim();
     // Prevent duplicate from React StrictMode double-invocation or rapid double submit
-    // Strict duplicate check removed as it was blocking legitimate messages
-    // isSubmittingRef (above) handles rapid double-clicks sufficienty
+    if (
+      lastSubmittedMessageRef.current &&
+      lastSubmittedMessageRef.current.content === messageText &&
+      Date.now() - lastSubmittedMessageRef.current.timestamp < 500
+    ) {
+      console.log('🛑 Duplicate message blocked (StrictMode or rapid double-invoke) [handleSubmit]');
+      return;
+    }
     isSubmittingRef.current = true;
     const imgs = [...attachedImages];
     // Clear input and images immediately
     setInput('');
     setAttachedImages([]);
     lastSubmittedMessageRef.current = { content: messageText, timestamp: Date.now() };
-
     try {
-      // Send the message with a timeout safeguard
-      // If sendMessage hangs for any reason (e.g. IPC call stuck), we must release the lock
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out')), 120000)
-      );
-
-      await Promise.race([
-        sendMessage(messageText, imgs),
-        timeoutPromise
-      ]);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // If it was a timeout, we might want to notify the user
-      if (error.message === 'Request timed out') {
-        setMessages(prev => [...prev, {
-          role: 'system',
-          content: '⚠️ Request timed out. The system might be busy processing files. Please try again.'
-        }]);
-        setIsLoading(false); // Force reset loading state
-      }
+      // Send the message
+      await sendMessage(messageText, imgs);
     } finally {
       isSubmittingRef.current = false;
-      // Double check to ensure focus returns to input
-      setTimeout(() => {
-        const textarea = document.querySelector('.ai-input');
-        if (textarea) textarea.focus();
-      }, 100);
     }
   };
 
@@ -884,14 +856,9 @@ Could you provide more details about what you'd like to build?`;
       let filename = null;
 
       // Check for filename= in first line
-      const filenameMatch = firstLine.match(/filename=(?:"([^"]+)"|'([^']+)'|([^\s]+))/);
+      const filenameMatch = firstLine.match(/filename=([^\s]+)/);
       if (filenameMatch) {
-        // Match 1 is double quotes, Match 2 is single quotes, Match 3 is no quotes
-        filename = filenameMatch[1] || filenameMatch[2] || filenameMatch[3];
-
-        // Clean any residual quotes just in case
-        if (filename) filename = filename.replace(/^['"]|['"]$/g, '');
-
+        filename = filenameMatch[1];
         // Language is everything before filename=
         const langPart = firstLine.substring(0, firstLine.indexOf('filename=')).trim();
         language = langPart || 'text';
@@ -1918,10 +1885,7 @@ The automatic fix system encountered an error. This might be due to:
     <div className="ai-assistant">
       <div className="ai-header">
         <div className="ai-header-content">
-          <h3>
-            <RiRobot2Line size={18} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} />
-            ExternAI
-          </h3>
+          <h3>AI Assistant</h3>
           {subscription && subscription.tier === 'free' && (
             <div className="subscription-status">
               <span className="prompts-remaining">
@@ -2053,98 +2017,100 @@ The automatic fix system encountered an error. This might be due to:
                             </div>
                           );
                         }
-                      } else {
-                        // TEXT CONTENT - Use sanitizer to strip all code
-                        const sanitizedText = sanitizeTextContent(part);
-                        if (!sanitizedText) return null;
-
-                        // Render sanitized text with markdown support
-                        return sanitizedText.split('\n').map((line, j) => {
-                          if (!line.trim()) return null;
-
-                          // Handle headers
-                          if (line.startsWith('### ')) {
-                            return <h3 key={`${i}-${j}`} style={{ fontSize: '1.1em', fontWeight: 'bold', marginTop: '1em', marginBottom: '0.5em' }}>{line.substring(4)}</h3>;
-                          }
-                          if (line.startsWith('## ')) {
-                            return <h2 key={`${i}-${j}`} style={{ fontSize: '1.3em', fontWeight: 'bold', marginTop: '1.2em', marginBottom: '0.6em', borderBottom: '1px solid #3a3a3a', paddingBottom: '0.3em' }}>{line.substring(3)}</h2>;
-                          }
-                          if (line.startsWith('# ')) {
-                            return <h1 key={`${i}-${j}`} style={{ fontSize: '1.5em', fontWeight: 'bold', marginTop: '1.5em', marginBottom: '0.7em' }}>{line.substring(2)}</h1>;
-                          }
-
-                          // Handle lists
-                          if (line.match(/^\d+\.\s/)) {
-                            return <li key={`${i}-${j}`} style={{ marginLeft: '1.5em', marginBottom: '0.3em' }}>{line.replace(/^\d+\.\s/, '')}</li>;
-                          }
-                          if (line.startsWith('- ') || line.startsWith('* ')) {
-                            return <li key={`${i}-${j}`} style={{ marginLeft: '1.5em', marginBottom: '0.3em', listStyleType: 'disc' }}>{line.substring(2)}</li>;
-                          }
-
-                          // Handle horizontal rule
-                          if (line.trim() === '---' || line.trim() === '***') {
-                            return <hr key={`${i}-${j}`} style={{ border: 'none', borderTop: '1px solid #3a3a3a', margin: '1.5em 0' }} />;
-                          }
-
-                          // Handle bold and inline code
-                          const boldRegex = /\*\*(.+?)\*\*/g;
-                          const inlineCodeRegex = /`([^`]+)`/g;
-                          const parts = [];
-                          let match;
-
-                          // Process inline code first
-                          const tempParts = [];
-                          let tempIndex = 0;
-                          while ((match = inlineCodeRegex.exec(line)) !== null) {
-                            if (match.index > tempIndex) {
-                              tempParts.push(line.substring(tempIndex, match.index));
-                            }
-                            // Only show inline code if it's short (like a filename or command)
-                            const codeContent = match[1];
-                            if (codeContent.length < 50 && !codeContent.includes('\n')) {
-                              tempParts.push({ type: 'code', content: codeContent });
-                            }
-                            tempIndex = match.index + match[0].length;
-                          }
-                          if (tempIndex < line.length) {
-                            tempParts.push(line.substring(tempIndex));
-                          }
-
-                          // Then handle bold
-                          tempParts.forEach((part, partIdx) => {
-                            if (typeof part === 'object' && part.type === 'code') {
-                              parts.push(<code key={`code-${j}-${partIdx}`} style={{
-                                background: 'rgba(255,255,255,0.1)',
-                                padding: '2px 6px',
-                                borderRadius: '3px',
-                                fontFamily: 'monospace',
-                                fontSize: '0.9em'
-                              }}>{part.content}</code>);
-                            } else if (typeof part === 'string') {
-                              let boldIndex = 0;
-                              const boldMatches = [];
-                              const boldRegexLocal = /\*\*(.+?)\*\*/g;
-                              while ((match = boldRegexLocal.exec(part)) !== null) {
-                                if (match.index > boldIndex) {
-                                  parts.push(part.substring(boldIndex, match.index));
-                                }
-                                parts.push(<strong key={`bold-${j}-${partIdx}-${match.index}`}>{match[1]}</strong>);
-                                boldIndex = match.index + match[0].length;
-                              }
-                              if (boldIndex < part.length) {
-                                parts.push(part.substring(boldIndex));
-                              }
-
-                            }
-                          });
-
-                          if (parts.length === 0) {
-                            parts.push(line);
-                          }
-
-                          return <p key={`${i}-${j}`}>{parts}</p>;
-                        });
                       }
+
+                      // TEXT CONTENT - Use sanitizer to strip all code
+                      const sanitizedText = sanitizeTextContent(part);
+                      if (!sanitizedText) return null;
+
+                      // Render sanitized text with markdown support
+                      return sanitizedText.split('\n').map((line, j) => {
+                        if (!line.trim()) return null;
+
+                        // Handle headers
+                        if (line.startsWith('### ')) {
+                          return <h3 key={`${i}-${j}`} style={{ fontSize: '1.1em', fontWeight: 'bold', marginTop: '1em', marginBottom: '0.5em' }}>{line.substring(4)}</h3>;
+                        }
+                        if (line.startsWith('## ')) {
+                          return <h2 key={`${i}-${j}`} style={{ fontSize: '1.3em', fontWeight: 'bold', marginTop: '1.2em', marginBottom: '0.6em', borderBottom: '1px solid #3a3a3a', paddingBottom: '0.3em' }}>{line.substring(3)}</h2>;
+                        }
+                        if (line.startsWith('# ')) {
+                          return <h1 key={`${i}-${j}`} style={{ fontSize: '1.5em', fontWeight: 'bold', marginTop: '1.5em', marginBottom: '0.7em' }}>{line.substring(2)}</h1>;
+                        }
+
+                        // Handle lists
+                        if (line.match(/^\d+\.\s/)) {
+                          return <li key={`${i}-${j}`} style={{ marginLeft: '1.5em', marginBottom: '0.3em' }}>{line.replace(/^\d+\.\s/, '')}</li>;
+                        }
+                        if (line.startsWith('- ') || line.startsWith('* ')) {
+                          return <li key={`${i}-${j}`} style={{ marginLeft: '1.5em', marginBottom: '0.3em', listStyleType: 'disc' }}>{line.substring(2)}</li>;
+                        }
+
+                        // Handle horizontal rule
+                        if (line.trim() === '---' || line.trim() === '***') {
+                          return <hr key={`${i}-${j}`} style={{ border: 'none', borderTop: '1px solid #3a3a3a', margin: '1.5em 0' }} />;
+                        }
+
+                        // Handle bold and inline code
+                        const boldRegex = /\*\*(.+?)\*\*/g;
+                        const inlineCodeRegex = /`([^`]+)`/g;
+                        const parts = [];
+                        let match;
+
+                        // Process inline code first
+                        const tempParts = [];
+                        let tempIndex = 0;
+                        while ((match = inlineCodeRegex.exec(line)) !== null) {
+                          if (match.index > tempIndex) {
+                            tempParts.push(line.substring(tempIndex, match.index));
+                          }
+                          // Only show inline code if it's short (like a filename or command)
+                          const codeContent = match[1];
+                          if (codeContent.length < 50 && !codeContent.includes('\n')) {
+                            tempParts.push({ type: 'code', content: codeContent });
+                          }
+                          tempIndex = match.index + match[0].length;
+                        }
+                        if (tempIndex < line.length) {
+                          tempParts.push(line.substring(tempIndex));
+                        }
+
+                        // Then handle bold
+                        tempParts.forEach((part, partIdx) => {
+                          if (typeof part === 'object' && part.type === 'code') {
+                            parts.push(<code key={`code-${j}-${partIdx}`} style={{
+                              background: 'rgba(255,255,255,0.1)',
+                              padding: '2px 6px',
+                              borderRadius: '3px',
+                              fontFamily: 'monospace',
+                              fontSize: '0.9em'
+                            }}>{part.content}</code>);
+                          } else if (typeof part === 'string') {
+                            let boldIndex = 0;
+                            const boldMatches = [];
+                            const boldRegexLocal = /\*\*(.+?)\*\*/g;
+                            while ((match = boldRegexLocal.exec(part)) !== null) {
+                              if (match.index > boldIndex) {
+                                parts.push(part.substring(boldIndex, match.index));
+                              }
+                              parts.push(<strong key={`bold-${j}-${partIdx}-${match.index}`}>{match[1]}</strong>);
+                              boldIndex = match.index + match[0].length;
+                            }
+                            if (boldIndex < part.length) {
+                              parts.push(part.substring(boldIndex));
+                            }
+                            if (boldIndex === 0) {
+                              parts.push(part);
+                            }
+                          }
+                        });
+
+                        if (parts.length === 0) {
+                          parts.push(line);
+                        }
+
+                        return <p key={`${i}-${j}`}>{parts}</p>;
+                      });
                     });
                   })()}
                 </div>

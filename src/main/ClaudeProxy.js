@@ -2,7 +2,13 @@
 // Node.js backend proxy for Anthropic Claude API
 const { ipcMain } = require('electron');
 const fetch = require('node-fetch');
-require('dotenv').config();
+
+// Load dotenv only if available (for development)
+try {
+  require('dotenv').config();
+} catch (e) {
+  // dotenv not available in production build, that's fine
+}
 
 // Use proxy server instead of calling API directly
 // This keeps the API key secure on the backend server
