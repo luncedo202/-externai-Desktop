@@ -146,7 +146,7 @@ const AIAssistant = forwardRef(({ onClose, workspaceFolder, onOpenFolder, onFile
   // Load messages from localStorage if available, but reset if workspaceFolder changes
   const defaultWelcome = {
     role: 'assistant',
-    content: 'Hello! I\'m your AI coding assistant.\n\nI\'m here to help you build software. I can:\n\n• Create complete, working code for websites, mobile apps, and games\n• Debug and fix errors with clear explanations\n• Explain code in simple, beginner-friendly terms\n• Build full project structures ready to deploy\n• Understand your entire project - I can see all your files\n• Run terminal commands automatically\n\nJust tell me what you want to build:\n- "Create a landing page for my startup"\n- "Build a contact form with email validation"\n- "Make a simple game"\n- "Add a login page to my website"\n\nI\'ll immediately create the files and run any necessary commands. No manual steps required.\n\nWhat would you like to build?',
+    content: 'Hello! I\'m your AI coding assistant.\n\nI can help you build software:\n\n• Create complete, working code for websites, mobile apps, and games\n• Debug and fix errors with clear explanations\n• Explain code in simple, beginner-friendly terms\n• Build full project structures ready to deploy\n• Understand your entire project - I can see all your files\n• Run terminal commands automatically\n\nJust tell me what you want to build:\n- "Create a landing page for my startup"\n- "Build a contact form with email validation"\n- "Make a simple game"\n- "Add a login page to my website"\n\nI\'ll immediately create the files and run any necessary commands. No manual steps required.\n\nWhat would you like to build?',
   };
 
   const [messages, setMessages] = useState(() => {
@@ -1906,7 +1906,15 @@ The automatic fix system encountered an error. This might be due to:
       )}
       <div className="ai-messages" ref={messagesContainerRef}>
         {messages
-          // Filter out duplicate user messages (same content within 2 seconds)
+          // Filter out duplicate messages with same content and role
+          .filter((msg, idx, arr) => {
+            // Keep first occurrence of each message
+            const firstIdx = arr.findIndex(m => 
+              m.role === msg.role && 
+              m.content === msg.content
+            );
+            return firstIdx === idx;
+          })
           .map((msg, idx) => {
             const codeBlocks = extractCodeBlocks(msg.content);
             const hasCode = codeBlocks.length > 0;
@@ -2096,10 +2104,11 @@ The automatic fix system encountered an error. This might be due to:
                               parts.push(<strong key={`bold-${j}-${partIdx}-${match.index}`}>{match[1]}</strong>);
                               boldIndex = match.index + match[0].length;
                             }
-                            if (boldIndex < part.length) {
+                            // Only push remaining text if we found bold matches
+                            if (boldIndex > 0 && boldIndex < part.length) {
                               parts.push(part.substring(boldIndex));
-                            }
-                            if (boldIndex === 0) {
+                            } else if (boldIndex === 0) {
+                              // No bold matches found, push the entire string once
                               parts.push(part);
                             }
                           }
