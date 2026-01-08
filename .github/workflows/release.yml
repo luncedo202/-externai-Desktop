@@ -64,13 +64,25 @@ jobs:
           
       - name: Build Electron App (macOS)
         if: matrix.os == 'macos-latest'
-        run: npx electron-builder --mac --publish always
+        run: npx electron-builder --mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Electron App (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash
-        run: npx electron-builder --win --x64 --publish always
+        run: npx electron-builder --win --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.zip
+            dist/*.exe
+            dist/*.dmg
+            dist/*.blockmap
+            dist/*.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
