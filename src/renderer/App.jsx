@@ -26,9 +26,8 @@ function App() {
   const [explorerRefreshTrigger, setExplorerRefreshTrigger] = useState(0);
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [theme, setTheme] = useState(() => {
-    // Load theme from localStorage or default to 'light'
-    // Changed key to 'app_theme' to reset legacy 'dark' preference
-    return localStorage.getItem('app_theme') || 'light';
+    // Load theme from localStorage or default to 'dark'
+    return localStorage.getItem('app_theme') || 'dark';
   });
 
   // New state for panels
@@ -85,17 +84,33 @@ function App() {
     setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
   };
 
+  const handleToggleTerminal = () => {
+    const newPanelVisible = !panelVisible;
+    setPanelVisible(newPanelVisible);
+    
+    // If showing panel and no terminals exist, create one
+    if (newPanelVisible && terminals.length === 0) {
+      const newTerminal = {
+        id: Date.now().toString(),
+        name: 'Terminal 1',
+      };
+      setTerminals([newTerminal]);
+    }
+  };
+
   useEffect(() => {
     // Setup menu event listeners
     const electronAPI = window.electronAPI;
 
-    electronAPI.menu.onNewFile(() => handleNewFile());
-    electronAPI.menu.onOpenFile((filePath) => handleOpenFile(filePath));
-    electronAPI.menu.onOpenFolder((folderPath) => handleOpenFolder(folderPath));
-    electronAPI.menu.onSave(() => handleSave());
-    electronAPI.menu.onToggleTerminal(() => setPanelVisible(!panelVisible));
-    electronAPI.menu.onToggleSidebar(() => setSidebarVisible(!sidebarVisible));
-    electronAPI.menu.onNewTerminal(() => handleNewTerminal());
+    if (electronAPI?.menu) {
+      electronAPI.menu.onNewFile(() => handleNewFile());
+      electronAPI.menu.onOpenFile((filePath) => handleOpenFile(filePath));
+      electronAPI.menu.onOpenFolder((folderPath) => handleOpenFolder(folderPath));
+      electronAPI.menu.onSave(() => handleSave());
+      electronAPI.menu.onToggleTerminal(() => handleToggleTerminal());
+      electronAPI.menu.onToggleSidebar(() => setSidebarVisible(!sidebarVisible));
+      electronAPI.menu.onNewTerminal(() => handleNewTerminal());
+    }
 
     // Setup IPC listeners for panels
     if (electronAPI.output?.onMessage) {
@@ -186,11 +201,40 @@ function App() {
     setExplorerRefreshTrigger(prev => prev + 1);
   };
 
-  // Handler for Preview button - triggers AI to run dev server
+  // Handler for Preview button - signals AI to run dev server
   const handlePreviewRequest = () => {
-    if (aiAssistantRef.current) {
-      aiAssistantRef.current.sendMessage('Run the development server for this project (npm run dev or npm start)');
+    if (!workspaceFolder) {
+      console.log('No workspace folder opened');
+      return;
     }
+
+    if (!aiAssistantRef.current) {
+      console.log('AI Assistant not available');
+      return;
+    }
+
+    // Send instruction to AI to detect and run the development server
+    aiAssistantRef.current.sendMessage(
+      'Please detect the project type and start the development server by running the appropriate command (npm run dev, npm start, or similar).'
+    );
+  };
+
+  // Handler for Publish button - tells AI to deploy to Vercel
+  const handlePublishRequest = () => {
+    if (!workspaceFolder) {
+      console.log('No workspace folder opened');
+      return;
+    }
+
+    if (!aiAssistantRef.current) {
+      console.log('AI Assistant not available');
+      return;
+    }
+
+    // Send instruction to AI to deploy the project
+    aiAssistantRef.current.sendMessage(
+      'Please deploy this project to Vercel. Steps: 1) Install vercel CLI globally (npm i -g vercel), 2) Run "vercel --prod" (the user will be prompted to login via browser if first time), 3) Provide me with the deployment URL when complete.'
+    );
   };
 
   const handleOpenFolder = async (folderPath) => {
@@ -274,9 +318,14 @@ function App() {
     const newTerminals = terminals.filter(t => t.id !== terminalId);
     setTerminals(newTerminals);
 
-    // If no terminals left, hide panel
+    // If no terminals left, create a new one automatically
     if (newTerminals.length === 0) {
-      setPanelVisible(false);
+      const newTerminal = {
+        id: Date.now().toString(),
+        name: 'Terminal 1',
+      };
+      setTerminals([newTerminal]);
+      setPanelVisible(true);
     }
   };
 
@@ -365,7 +414,7 @@ function App() {
             onOpenFolder={handleOpenFolder}
             explorerRefreshTrigger={explorerRefreshTrigger}
             onExplorerRefresh={() => {
-              if (aiAssistantRef.current) {
+              if (aiAssistantRef.current && typeof aiAssistantRef.current.syncFiles === 'function') {
                 aiAssistantRef.current.syncFiles();
               }
             }}
@@ -385,6 +434,7 @@ function App() {
             onOpenFolder={handleOpenFolder}
             theme={theme}
             onPreviewClick={handlePreviewRequest}
+            onPublishClick={handlePublishRequest}
             onCursorChange={setCursorPosition}
             pendingPlan={pendingPlan}
           />

@@ -28,9 +28,23 @@
   max-width: 450px;
 }
 
+.auth-logo-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.auth-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
 .auth-info h1 {
   font-size: 48px;
-  margin: 0 0 32px 0;
+  margin: 0;
   color: #fff;
   font-weight: 700;
 }
@@ -137,8 +151,8 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+  border-color: #000000;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
 }
 
 .form-group input:disabled {
@@ -153,7 +167,7 @@
 .auth-button {
   margin-top: 8px;
   padding: 12px;
-  background: #007acc;
+  background: #000000;
   border: none;
   border-radius: 6px;
   color: #fff;
@@ -164,9 +178,9 @@
 }
 
 .auth-button:hover:not(:disabled) {
-  background: #005a9e;
+  background: #1a1a1a;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .auth-button:active:not(:disabled) {

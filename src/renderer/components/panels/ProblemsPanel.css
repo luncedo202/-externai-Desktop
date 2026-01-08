@@ -54,7 +54,7 @@
 }
 
 .stat-button.active {
-  background: #007acc;
+  background: #000000;
   color: #ffffff;
 }
 
@@ -67,7 +67,7 @@
 }
 
 .stat-button.info.active {
-  background: #007acc;
+  background: #000000;
 }
 
 .problems-actions {
@@ -90,7 +90,7 @@
 }
 
 .icon-button.active {
-  background: #007acc;
+  background: #000000;
 }
 
 .problems-content {
@@ -132,7 +132,7 @@
   align-items: center;
   padding: 4px 8px;
   background: #252526;
-  border-left: 3px solid #007acc;
+  border-left: 3px solid #000000;
   margin-bottom: 4px;
   font-size: 12px;
 }
@@ -185,7 +185,7 @@
 }
 
 .problem-item.info {
-  border-left-color: #007acc;
+  border-left-color: #000000;
 }
 
 .problem-icon {

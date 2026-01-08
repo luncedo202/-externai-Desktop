@@ -13,6 +13,8 @@ function Panel({
   onNewTerminal,
   onCloseTerminal,
   workspaceFolder,
+  outputLogs = [],
+  diagnostics = [],
   debugLogs = [],
   onClearOutput,
   onClearDiagnostics,

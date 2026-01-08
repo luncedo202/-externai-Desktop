@@ -58,7 +58,10 @@ function AuthScreen({ onAuthSuccess }) {
       <div className="auth-container">
         <div className="auth-content">
           <div className="auth-info">
-            <h1>ExternAI</h1>
+            <div className="auth-logo-title">
+              <img src="../../assets/externai-logo.png" alt="ExternAI Logo" className="auth-logo" />
+              <h1>ExternAI</h1>
+            </div>
             <p className="auth-description">
               ExternAI is a powerful desktop IDE with advanced AI capabilities. 
               Build websites, mobile apps, and games with intelligent code generation, real-time debugging assistance, 

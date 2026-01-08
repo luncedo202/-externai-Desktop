@@ -56,7 +56,7 @@
 }
 
 .channel-select:focus {
-  border-color: #007acc;
+  border-color: #000000;
 }
 
 .output-actions {
@@ -90,7 +90,7 @@
 }
 
 .icon-button.active {
-  background: #007acc;
+  background: #000000;
 }
 
 .output-content {

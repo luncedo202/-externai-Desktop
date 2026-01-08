@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { FiX, FiMonitor, FiCode } from 'react-icons/fi';
+import { FiX, FiMonitor, FiCode, FiUploadCloud } from 'react-icons/fi';
 import './EditorArea.css';
 
-function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onContentChange, onOpenFolder, theme, onPreviewClick, onCursorChange, pendingPlan }) {
+function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onContentChange, onOpenFolder, theme, onPreviewClick, onPublishClick, onCursorChange, pendingPlan }) {
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('http://localhost:3000');
   const [fontSize, setFontSize] = useState(12);
@@ -115,6 +115,14 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
           >
             {showPreview ? <FiCode size={16} /> : <FiMonitor size={16} />}
             {showPreview ? 'Code' : 'Preview'}
+          </button>
+          <button
+            className="toolbar-button"
+            onClick={onPublishClick}
+            title="Deploy and get shareable link"
+          >
+            <FiUploadCloud size={16} />
+            Publish
           </button>
           {showPreview && (
             <input
