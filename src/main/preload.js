@@ -124,6 +124,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   auth: {
     setTokens: (tokens) => ipcRenderer.invoke('auth:setTokens', tokens),
     getTokens: () => ipcRenderer.invoke('auth:getTokens'),
+    getToken: async () => {
+      const tokens = await ipcRenderer.invoke('auth:getTokens');
+      return tokens?.accessToken || tokens?.idToken || null;
+    },
     clearTokens: () => ipcRenderer.invoke('auth:clearTokens'),
     setUser: (user) => ipcRenderer.invoke('auth:setUser', user),
     getUser: () => ipcRenderer.invoke('auth:getUser'),

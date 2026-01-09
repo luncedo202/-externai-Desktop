@@ -308,20 +308,24 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
     return (
       <div key={item.path}>
         <div
-          className="tree-item"
+          className={`tree-item ${item.isDirectory ? 'tree-item-folder' : 'tree-item-file'}`}
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
           onClick={() => handleItemClick(item)}
           onContextMenu={(e) => handleContextMenu(e, item)}
         >
           {item.isDirectory && (
-            <span className="tree-icon">
+            <span className="tree-chevron">
               {isExpanded ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
             </span>
           )}
           <span className="tree-icon">
-            {item.isDirectory ? <FiFolder size={16} /> : getFileIcon(item.name)}
+            {item.isDirectory ? (
+              <FiFolder size={16} style={{ color: isExpanded ? '#dcb67a' : '#c09553' }} />
+            ) : (
+              getFileIcon(item.name)
+            )}
           </span>
-          <span className="tree-label">{item.name}</span>
+          <span className="tree-label" title={item.name}>{item.name}</span>
         </div>
         {creatingFolder && creatingIn === item.path && (
           <form

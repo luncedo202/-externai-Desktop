@@ -217,6 +217,138 @@ const AIAssistant = forwardRef(({ onClose, workspaceFolder, onOpenFolder, onFile
   const abortControllerRef = useRef(null); // Track abort controller for cancelling requests
   const isSubmittingRef = useRef(false); // Guard against double submissions
   const lastSubmittedMessageRef = useRef(null); // Track last submitted message to prevent StrictMode duplicates
+  const [retryContext, setRetryContext] = useState(null); // Store context for retry functionality
+
+  // Retry function for failed auto-fix attempts
+  const handleRetryAutoFix = async (context) => {
+    if (!context) return;
+
+    console.log('🔄 Retrying auto-fix...');
+    
+    // Remove the error message
+    setMessages(prev => prev.filter(msg => !msg.isRetryError));
+    
+    // Show retrying status
+    const retryStatusId = `retry-${Date.now()}`;
+    setMessages(prev => [
+      ...prev,
+      {
+        id: retryStatusId,
+        role: 'system',
+        content: '🔄 **Retrying auto-fix...**\n\nChecking backend connection and attempting fix again...',
+        isWorking: true
+      }
+    ]);
+
+    setIsLoading(true);
+
+    try {
+      // Check backend health first
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const healthCheck = await fetch(`${backendUrl}/health`, { 
+        method: 'GET',
+        signal: AbortSignal.timeout(3000)
+      });
+
+      if (!healthCheck.ok) {
+        throw new Error('Backend server is not responding');
+      }
+
+      // Remove retry status
+      setMessages(prev => prev.filter(msg => msg.id !== retryStatusId));
+
+      // Retry the fix request
+      const fixResponse = await ClaudeService.getClaudeCompletion(
+        context.conversation,
+        context.maxTokens || 20000,
+        context.timeout || 90000
+      );
+
+      if (fixResponse && fixResponse.success && fixResponse.message) {
+        // Add the fix message
+        const fixMessage = {
+          id: Date.now() + Math.random(),
+          role: 'assistant',
+          content: fixResponse.message
+        };
+
+        setMessages(prev => [...prev, fixMessage]);
+        conversationHistory.current.push(fixMessage);
+
+        // Process the fix
+        setTimeout(async () => {
+          try {
+            const fixCommands = extractCommands(fixResponse.message);
+            const fixCodeBlocks = extractCodeBlocks(fixResponse.message);
+
+            if (fixCodeBlocks.length > 0) {
+              await handleCreateFilesAutomatically(fixResponse.message, fixMessage.id);
+            }
+
+            if (fixCommands.length > 0) {
+              await executeCommandsAutomatically(fixResponse.message);
+            }
+          } catch (err) {
+            console.error('Error processing retry fix:', err);
+          }
+        }, 500);
+
+        // Clear retry context
+        setRetryContext(null);
+      } else {
+        throw new Error(fixResponse?.error || 'Invalid response from AI');
+      }
+    } catch (error) {
+      console.error('❌ Retry failed:', error);
+      
+      // Remove retry status
+      setMessages(prev => prev.filter(msg => msg.id !== retryStatusId));
+      
+      // Show updated error
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: 'assistant',
+          content: createRetryErrorMessage(error.message, context.command),
+          isRetryError: true,
+          retryContext: context
+        }
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Create enhanced error message
+  const createRetryErrorMessage = (errorMsg, command) => {
+    const isConnectionError = errorMsg.includes('connect') || errorMsg.includes('fetch') || errorMsg.includes('ECONNREFUSED');
+    
+    return `## 🔴 Auto-Fix Failed
+
+**Error:** ${errorMsg}
+
+${isConnectionError ? `### 🔧 Quick Fix
+
+The backend server appears to be offline. Start it with:
+
+\`\`\`bash
+cd backend && npm start
+\`\`\`
+
+Then click the **Retry** button below.
+
+` : ''}### 💡 What Happened?
+
+${isConnectionError 
+  ? '- The AI backend service is not running\n- Auto-fix requires the backend to communicate with Claude API\n- Your command failed and couldn\'t be automatically fixed'
+  : '- The AI service encountered an error\n- This could be due to API timeout, rate limits, or authentication issues\n- The command failed but auto-fix couldn\'t complete'
+}
+
+### ✅ What You Can Do
+
+1. **Start Backend** (if not running):\n   \`\`\`bash\n   cd backend && npm start\n   \`\`\`\n\n2. **Click Retry Button** below to try again\n\n3. **Manual Fix:** Run this in terminal:\n   \`\`\`bash\n   ${command}\n   \`\`\`\n\n4. **Ask for Help:** Type: "Help me fix: ${command.substring(0, 40)}..."`;
+  };
 
   // Fetch subscription status on mount
   useEffect(() => {
@@ -317,14 +449,14 @@ const AIAssistant = forwardRef(({ onClose, workspaceFolder, onOpenFolder, onFile
     // Generate unique message ID
     const userMessageId = Date.now();
 
-    // Prevent duplicate from React StrictMode double-invocation or rapid double submit
-    // Check if this exact message was just submitted (within 500ms)
+    // Prevent duplicate from React StrictMode double-invocation only
+    // Very short window (50ms) - only blocks true double-invokes, not retries
     if (
       lastSubmittedMessageRef.current &&
       lastSubmittedMessageRef.current.content === messageContent &&
-      Date.now() - lastSubmittedMessageRef.current.timestamp < 500
+      Date.now() - lastSubmittedMessageRef.current.timestamp < 50
     ) {
-      console.log('🛑 Duplicate message blocked (StrictMode or rapid double-invoke)');
+      console.log('🛑 Duplicate message blocked (StrictMode double-invoke)');
       return;
     }
 
@@ -639,7 +771,7 @@ const AIAssistant = forwardRef(({ onClose, workspaceFolder, onOpenFolder, onFile
   const handleSubmit = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Guard against double submissions and duplicate messages
+    // Guard against double submissions
     if (isSubmittingRef.current) {
       console.log('🛑 Blocked: Submission already in progress (isSubmittingRef)');
       return;
@@ -653,21 +785,12 @@ const AIAssistant = forwardRef(({ onClose, workspaceFolder, onOpenFolder, onFile
       return;
     }
     const messageText = input.trim();
-    // Prevent duplicate from React StrictMode double-invocation or rapid double submit
-    if (
-      lastSubmittedMessageRef.current &&
-      lastSubmittedMessageRef.current.content === messageText &&
-      Date.now() - lastSubmittedMessageRef.current.timestamp < 500
-    ) {
-      console.log('🛑 Duplicate message blocked (StrictMode or rapid double-invoke) [handleSubmit]');
-      return;
-    }
+    
     isSubmittingRef.current = true;
     const imgs = [...attachedImages];
     // Clear input and images immediately
     setInput('');
     setAttachedImages([]);
-    lastSubmittedMessageRef.current = { content: messageText, timestamp: Date.now() };
     try {
       // Send the message
       await sendMessage(messageText, imgs);
@@ -1013,11 +1136,110 @@ Could you provide more details about what you'd like to build?`;
 
         // Track command execution
         const executionTime = Date.now() - commandId;
-        AnalyticsService.trackCommand(command, result.success, executionTime);
+        
+        // Enhanced error detection - check for stderr with errors even if success=true
+        const hasError = !result.success || 
+          (result.stderr && (
+            result.stderr.toLowerCase().includes('error') ||
+            result.stderr.toLowerCase().includes('failed') ||
+            result.stderr.toLowerCase().includes('cannot find') ||
+            result.stderr.toLowerCase().includes('not found') ||
+            result.stderr.toLowerCase().includes('enoent')
+          ));
+        
+        AnalyticsService.trackCommand(command, !hasError, executionTime);
+
+        // Auto-open browser if dev server started successfully
+        if (!hasError && isRunCommand && result.stdout) {
+          // Extract URL from output (common patterns from Vite, Next.js, React, etc.)
+          const urlPatterns = [
+            /(?:Local|➜\s+Local):\s+(https?:\/\/[^\s]+)/i,
+            /(?:running on|listening on|server running at):\s+(https?:\/\/[^\s]+)/i,
+            /(https?:\/\/localhost:\d+)/i,
+            /(http:\/\/127\.0\.0\.1:\d+)/i,
+            /(https?:\/\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:\d+)/i
+          ];
+
+          let detectedUrl = null;
+          const output = result.stdout + (result.stderr || '');
+
+          for (const pattern of urlPatterns) {
+            const match = output.match(pattern);
+            if (match) {
+              detectedUrl = match[1] || match[0];
+              break;
+            }
+          }
+
+          if (detectedUrl) {
+            // Clean up the URL (remove ANSI codes, trailing slashes, etc.)
+            detectedUrl = detectedUrl.replace(/\x1b\[[0-9;]*m/g, '').trim();
+            
+            console.log('🌐 Auto-opening browser for:', detectedUrl);
+            
+            // Open in browser after a short delay to let server fully initialize
+            setTimeout(async () => {
+              try {
+                await window.electronAPI.shell.openExternal(detectedUrl);
+                
+                // Show user-friendly notification
+                setMessages(prev => [
+                  ...prev,
+                  {
+                    id: Date.now(),
+                    role: 'system',
+                    content: `🌐 **Application started!**\n\nOpened in browser: [${detectedUrl}](${detectedUrl})\n\nThe application is now running and accessible.`,
+                  }
+                ]);
+              } catch (err) {
+                console.error('Failed to open browser:', err);
+              }
+            }, 2000); // 2 second delay to ensure server is ready
+          }
+        }
 
         // If command failed, notify the AI to fix it
-        if (!result.success) {
+        if (hasError) {
           debug('❌ Command failed, asking AI to fix it with full context...');
+
+          // Check backend connectivity first
+          const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+          let isBackendAvailable = false;
+          
+          try {
+            const healthCheck = await fetch(`${backendUrl}/health`, { 
+              method: 'GET',
+              signal: AbortSignal.timeout(3000) // 3 second timeout
+            });
+            isBackendAvailable = healthCheck.ok;
+          } catch (err) {
+            console.error('❌ Backend not available:', err.message);
+          }
+
+          if (!isBackendAvailable) {
+            setMessages(prev => [
+              ...prev,
+              {
+                id: Date.now(),
+                role: 'assistant',
+                content: `❌ **Auto-fix unavailable**\n\nThe backend server is not running. To enable auto-fix:\n\n1. Start backend: \`cd backend && npm start\`\n2. Or run the failed command manually\n3. Or ask me for help with: "${command}"`,
+                isError: true
+              }
+            ]);
+            return;
+          }
+
+          // Show auto-fix starting message
+          const autoFixStatusId = `autofix-${Date.now()}`;
+          setMessages(prev => [
+            ...prev,
+            {
+              id: autoFixStatusId,
+              role: 'system',
+              content: '🔧 **Auto-fix activated**\n\nAnalyzing error and generating fix...',
+              isWorking: true
+            }
+          ]);
 
           // Get COMPLETE workspace context for better error analysis - include ALL file contents
           let workspaceContext = '';
@@ -1170,7 +1392,10 @@ Provide complete fixed files, not explanations.`
 
             console.log('📨 Sending fix request with', fixConversation.length, 'messages');
 
-            const fixResponse = await ClaudeService.getClaudeCompletion(fixConversation, 20000);
+            const fixResponse = await ClaudeService.getClaudeCompletion(fixConversation, 20000, 90000); // 90 second timeout for complex fixes
+
+            // Remove auto-fix status message
+            setMessages(prev => prev.filter(msg => msg.id !== autoFixStatusId));
 
             console.log('🤖 Fix response received:', JSON.stringify(fixResponse).substring(0, 200));
 
@@ -1231,25 +1456,26 @@ Provide complete fixed files, not explanations.`
             console.error('❌ Error getting AI fix:', fixError);
             console.error('❌ Error stack:', fixError.stack);
 
-            // Show error message to user with more details
+            // Store retry context
+            const retryCtx = {
+              conversation: fixConversation,
+              command: command,
+              maxTokens: 20000,
+              timeout: 90000
+            };
+            setRetryContext(retryCtx);
+
+            // Show enhanced error message with retry button
             setMessages(prev => {
-              const filtered = prev.filter(msg => msg.id !== fixMessageId);
+              const filtered = prev.filter(msg => msg.id !== fixMessageId || msg.id !== autoFixStatusId);
               return [
                 ...filtered,
                 {
                   id: Date.now(),
                   role: 'assistant',
-                  content: `❌ **Auto-fix failed:** ${fixError.message}
-
-The automatic fix system encountered an error. This might be due to:
-- Backend connection issue
-- API timeout
-- Invalid response format
-
-**What you can do:**
-1. Try running the command manually in the terminal
-2. Check the backend server logs
-3. Ask me to help fix this specific error manually`
+                  content: createRetryErrorMessage(fixError.message, command),
+                  isRetryError: true,
+                  retryContext: retryCtx
                 }
               ];
             });
@@ -2123,6 +2349,20 @@ The automatic fix system encountered an error. This might be due to:
                     });
                   })()}
                 </div>
+                
+                {/* Retry button for failed auto-fix */}
+                {msg.isRetryError && msg.retryContext && (
+                  <div className="retry-button-container">
+                    <button
+                      className="retry-button"
+                      onClick={() => handleRetryAutoFix(msg.retryContext)}
+                      disabled={isLoading}
+                    >
+                      <FiLoader className={isLoading ? 'spinning' : ''} size={16} />
+                      {isLoading ? 'Retrying...' : 'Retry Auto-Fix'}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -2177,30 +2417,45 @@ The automatic fix system encountered an error. This might be due to:
           </div>
         )}
 
-        <div className="ai-input-wrapper">
-          <textarea
-            className="ai-input"
-            placeholder={isDraggingOver ? "Drop image here..." : "Ask a question..."}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              // Submit on Enter, add newline on Shift+Enter
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
-            disabled={isLoading}
-            rows={5}
-          />
-          <button
-            type="submit"
-            className="ai-send"
-            disabled={!input.trim() || isLoading}
-            title={isLoading ? "AI is working..." : "Send"}
-          >
-            {isLoading ? <FiLoader className="spinning" size={18} /> : <FiSend size={18} />}
-          </button>
+        <div className="ai-input-container">
+          <div className="ai-input-glow"></div>
+          <div className="ai-input-inner">
+            <textarea
+              className="ai-input"
+              placeholder={isDraggingOver ? "Drop image here..." : "What would you like to build today?"}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                // Submit on Enter, add newline on Shift+Enter
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
+              disabled={isLoading}
+              rows={3}
+            />
+            <div className="ai-input-actions">
+              <div className="input-hint">
+                <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line
+              </div>
+              <button
+                type="submit"
+                className="ai-send"
+                disabled={!input.trim() || isLoading}
+                title={isLoading ? "AI is working..." : "Send message"}
+              >
+                {isLoading ? (
+                  <FiLoader className="spinning" size={18} />
+                ) : (
+                  <>
+                    <FiSend size={16} />
+                    <span>Send</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </form>
     </div>

@@ -6,6 +6,7 @@ import Panel from './components/Panel';
 import StatusBar from './components/StatusBar';
 import AIAssistant from './components/AIAssistant';
 import AuthScreen from './components/AuthScreen';
+import SplashScreen from './components/SplashScreen';
 import FirebaseService from './services/FirebaseService';
 import AnalyticsService from './services/AnalyticsService';
 import PricingPlans from './components/PricingPlans';
@@ -15,13 +16,17 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
   const [activeView, setActiveView] = useState('explorer');
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
   const [openFiles, setOpenFiles] = useState([]);
   const [activeFile, setActiveFile] = useState(null);
   const [workspaceFolder, setWorkspaceFolder] = useState(null);
-  const [terminals, setTerminals] = useState([]);
+  const [terminals, setTerminals] = useState([{
+    id: 'initial-terminal',
+    name: 'Terminal 1'
+  }]); // Always start with one terminal open
   const [aiVisible, setAiVisible] = useState(true);
   const [explorerRefreshTrigger, setExplorerRefreshTrigger] = useState(0);
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
@@ -385,13 +390,9 @@ function App() {
     return languageMap[ext] || 'plaintext';
   };
 
-  // Show auth screen if not authenticated
-  if (checkingAuth) {
-    return (
-      <div className="app" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <p style={{ color: '#d4d4d4' }}>Loading...</p>
-      </div>
-    );
+  // Show splash screen during initial load
+  if (showSplash || checkingAuth) {
+    return <SplashScreen onLoadComplete={() => setShowSplash(false)} />;
   }
 
   if (!isAuthenticated) {

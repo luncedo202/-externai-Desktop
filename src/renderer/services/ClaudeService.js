@@ -14,22 +14,44 @@ async function getAuthToken() {
   }
 }
 
-async function getClaudeCompletion(prompt, maxTokens = 20000) {
+async function getClaudeCompletion(prompt, maxTokens = 20000, timeout = 60000) {
   console.log('[ClaudeService] Calling Claude via backend proxy...');
+  console.log('[ClaudeService] Backend URL:', BACKEND_URL);
+  console.log('[ClaudeService] Timeout:', timeout, 'ms');
 
   try {
     const token = await getAuthToken();
-    const response = await fetch(`${BACKEND_URL}/api/claude/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        messages: Array.isArray(prompt) ? prompt : [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens
-      })
-    });
+    
+    let response;
+    try {
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      response = await fetch(`${BACKEND_URL}/api/claude/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          messages: Array.isArray(prompt) ? prompt : [{ role: 'user', content: prompt }],
+          max_tokens: maxTokens
+        }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+    } catch (fetchError) {
+      console.error('[ClaudeService] Fetch error:', fetchError);
+      if (fetchError.name === 'AbortError') {
+        throw new Error(`Request timed out after ${timeout/1000} seconds. The backend might be slow or Claude API is not responding.`);
+      }
+      if (fetchError.message === 'Failed to fetch' || fetchError.message.includes('NetworkError')) {
+        throw new Error('Cannot connect to backend server. Please ensure the backend is running on port 5000.');
+      }
+      throw fetchError;
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -95,6 +117,7 @@ async function getClaudeCompletion(prompt, maxTokens = 20000) {
 
 async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null, systemPrompt = null) {
   console.log('[ClaudeService] Starting Claude stream via backend...');
+  console.log('[ClaudeService] Backend URL:', BACKEND_URL);
 
   try {
     const token = await getAuthToken();
@@ -107,15 +130,27 @@ async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null
       body.system = systemPrompt;
     }
 
-    const response = await fetch(`${BACKEND_URL}/api/claude/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(body),
-      signal: signal // Pass abort signal to fetch
-    });
+    let response;
+    try {
+      response = await fetch(`${BACKEND_URL}/api/claude/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body),
+        signal: signal // Pass abort signal to fetch
+      });
+    } catch (fetchError) {
+      console.error('[ClaudeService] Fetch error:', fetchError);
+      if (fetchError.name === 'AbortError') {
+        return { success: false, error: 'Request was cancelled', aborted: true };
+      }
+      if (fetchError.message === 'Failed to fetch') {
+        throw new Error('Cannot connect to backend server. Please ensure the backend is running on port 5000.');
+      }
+      throw fetchError;
+    }
 
     if (!response.ok) {
       const error = await response.json();
