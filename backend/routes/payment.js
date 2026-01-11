@@ -3,6 +3,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { authenticateToken } = require('../middleware/auth');
+const database = require('../models/database');
 
 const db = admin.firestore();
 

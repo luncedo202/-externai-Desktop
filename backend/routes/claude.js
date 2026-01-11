@@ -3,6 +3,7 @@ const router = express.Router();
 const axios = require('axios');
 const admin = require('firebase-admin');
 const { authenticateToken } = require('../middleware/auth');
+const database = require('../models/database');
 
 const db = admin.firestore();
 
@@ -64,6 +65,64 @@ async function getUserUsage(userId) {
   return userData;
 }
 
+// Summarization endpoint (Layer 3: Conversation pruning)
+router.post('/summarize', authenticateToken, async (req, res) => {
+  try {
+    const { messages } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Invalid messages format' });
+    }
+
+    console.log(`[Summarize] Generating summary for ${messages.length} messages`);
+
+    // Call Claude to summarize
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 1000,
+        messages: [
+          {
+            role: 'user',
+            content: `Summarize this conversation concisely. Focus on:
+- Key decisions made
+- Technical choices and rationale
+- Open tasks or pending work
+- Important context that should be remembered
+
+Keep it under 300 words. Be technical and precise.
+
+Conversation:
+${messages.map(m => `${m.role}: ${m.content.substring(0, 500)}`).join('\n\n')}
+
+Summary:`
+          }
+        ],
+        system: 'You are a technical summarizer. Generate concise, fact-based summaries.'
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01',
+          'x-api-key': process.env.ANTHROPIC_API_KEY
+        }
+      }
+    );
+
+    const summary = response.data.content[0].text;
+    console.log(`[Summarize] Generated summary: ${summary.substring(0, 100)}...`);
+
+    res.json({ summary });
+  } catch (error) {
+    console.error('[Summarize] Error:', error.response?.data || error.message);
+    res.status(500).json({ 
+      error: 'Summarization failed',
+      details: error.response?.data?.error?.message || error.message
+    });
+  }
+});
+
 // Claude API proxy with streaming
 router.post('/stream', authenticateToken, async (req, res) => {
   try {
@@ -99,14 +158,14 @@ router.post('/stream', authenticateToken, async (req, res) => {
     }
 
     // Get request body
-    const { messages, max_tokens = 20000, system } = req.body;
+    const { messages, max_tokens = 20000, system, projectState, conversationSummary } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Invalid messages format' });
     }
 
     // Optimized System Prompt - AI as Software Developer
-    const defaultSystemPrompt = `You are a software developer. Execute instructions immediately. No confirmations needed.
+    let defaultSystemPrompt = `You are a software developer. Execute instructions immediately. No confirmations needed.
 
 ═══════════════════════════════════════════
 CRITICAL RULES (READ FIRST)
@@ -128,11 +187,14 @@ CRITICAL RULES (READ FIRST)
    • All brackets/quotes closed
    • All imports included
    • Ready to run immediately
+   • NO TRUNCATION - Write the entire file
 
 4. FORBIDDEN - Never write:
    • "// TODO", "// Add code here", "..."
+   • "// ... rest of the code", "// ... (truncated)"
    • Incomplete functions or placeholders
    • Code that won't compile/run
+   • Partial files that need "filling in"
 
 ═══════════════════════════════════════════
 EXECUTION FLOW
@@ -141,9 +203,15 @@ EXECUTION FLOW
 ONE STEP AT A TIME:
 • Max 3 files OR 2 commands per response
 • Stop and wait after each batch
+• Each file must be 100% complete - no partial files
 
 • User says anything (continue/next/ok/yes) → proceed
 • User gives new instruction → switch to that
+
+IMPORTANT:
+• If a file is too long for one response, split into multiple smaller files
+• Better to have 3 complete small files than 1 incomplete large file
+• Every file you write must be immediately runnable
 
 RESPONSE FORMAT (mandatory at end of every response):
 
@@ -260,20 +328,92 @@ export default function App() {
 \`\`\`
 
 ═══════════════════════════════════════════
-ERROR HANDLING
+ERROR HANDLING & AUTO-FIX
 ═══════════════════════════════════════════
 
-IF A COMMAND FAILS:
-1. Read the error message carefully
-2. Identify root cause (missing dep, syntax error, wrong path)
-3. Provide complete fix with filename= format
-4. Never repeat the same failed command without fixing
+WHEN A COMMAND FAILS - FOLLOW THIS EXACT PROCESS:
 
-COMMON FIXES:
-• "module not found" → Add to package.json dependencies
-• "syntax error" → Fix the syntax, provide complete file
-• "ENOENT" → Create missing file/directory
-• "port in use" → Use different port or kill process
+1. READ ERROR THOROUGHLY
+   • Identify error type (dependency, syntax, file missing, etc.)
+   • Find exact file and line number if mentioned
+   • Look for stack traces and root cause
+
+2. DIAGNOSE ROOT CAUSE
+   • Don't just treat symptoms
+   • Understand why it failed
+   • Check if it's a cascade from earlier issue
+
+3. PROVIDE COMPLETE FIX
+   • Always use filename= format for code
+   • Provide ENTIRE file contents, not just changed lines
+   • Include all imports, exports, and dependencies
+   • Ensure syntax is 100% valid
+
+4. NEVER REPEAT FAILED COMMANDS
+   • Fix root cause first
+   • Then provide corrected command if needed
+   • Don't try the same thing expecting different results
+
+COMMON ERROR PATTERNS & FIXES:
+
+Module Not Found:
+❌ "Cannot find module 'package-name'"
+✅ Fix:
+\`\`\`json filename=package.json
+{
+  "dependencies": {
+    "package-name": "^1.0.0",
+    ...existing deps
+  }
+}
+\`\`\`
+Then: \`\`\`bash
+npm install
+\`\`\`
+
+File Not Found (ENOENT):
+❌ "ENOENT: no such file '/path/to/file.js'"
+✅ Create the missing file with complete code
+\`\`\`javascript filename=path/to/file.js
+// Complete implementation
+\`\`\`
+
+Syntax Error:
+❌ "SyntaxError: Unexpected token"
+✅ Read entire file, fix ALL syntax issues
+\`\`\`javascript filename=src/broken.js
+// Complete corrected file
+\`\`\`
+
+Port Already in Use:
+❌ "EADDRINUSE: address already in use :::5173"
+✅ Change port in config:
+\`\`\`javascript filename=vite.config.js
+export default defineConfig({
+  server: { port: 5174 }
+})
+\`\`\`
+
+Import Error:
+❌ "Cannot resolve import"
+✅ Fix import path AND ensure file exists:
+\`\`\`javascript filename=src/App.jsx
+import Component from './components/Component.jsx'
+\`\`\`
+
+Command Not Found:
+❌ "command not found: xyz"
+✅ Either install tool OR use different command:
+\`\`\`bash
+npm install -g xyz
+\`\`\`
+
+FORBIDDEN WHEN FIXING:
+❌ Partial file fixes - Always provide complete files
+❌ "Try running X" without fixing the cause
+❌ Explanations without code
+❌ Code without filename=
+❌ Repeating failed commands
 
 ═══════════════════════════════════════════
 CODE QUALITY CHECKLIST
@@ -323,6 +463,16 @@ NEVER DO THIS
 
 You are the developer. Execute. Deliver. Every file complete and runnable.`;
 
+    // Inject Project State (Layer 2) if provided
+    if (projectState) {
+      defaultSystemPrompt += `\n\n${projectState}`;
+    }
+
+    // Inject Conversation Summary (Layer 3) if provided
+    if (conversationSummary) {
+      defaultSystemPrompt += `\n\n## CONVERSATION HISTORY SUMMARY\n\n${conversationSummary}\n`;
+    }
+
     // Use provided system prompt or default
     const finalSystemPrompt = system || defaultSystemPrompt;
 
@@ -335,8 +485,8 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
-        model: 'claude-sonnet-4-5',
-        max_tokens: Math.min(max_tokens, 8192),
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: Math.min(max_tokens, 20000),
         messages,
         stream: true,
         system: finalSystemPrompt
@@ -419,7 +569,26 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
     console.error('SERVER LOG: Claude API Error Details:');
     console.error('- Status:', error.response?.status);
     console.error('- Status Text:', error.response?.statusText);
-    console.error('- Data:', JSON.stringify(error.response?.data, null, 2));
+    
+    // Try to read error data if it's a stream
+    if (error.response?.data) {
+      try {
+        let errorData = '';
+        if (typeof error.response.data.on === 'function') {
+          error.response.data.on('data', (chunk) => {
+            errorData += chunk.toString();
+          });
+          error.response.data.on('end', () => {
+            console.error('- Error Data:', errorData);
+          });
+        } else {
+          console.error('- Error Data:', error.response.data);
+        }
+      } catch (e) {
+        console.error('- Could not parse error data');
+      }
+    }
+    
     console.error('- Message:', error.message);
 
     if (error.response?.status === 429) {
@@ -429,7 +598,7 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
     res.status(500).json({
       error: 'Failed to process AI request',
       details: error.response?.data?.error?.message || error.message,
-      model_used: 'claude-sonnet-4-5'
+      model_used: 'claude-sonnet-4-5-20250929'
     });
   }
 });

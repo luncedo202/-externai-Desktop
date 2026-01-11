@@ -30,7 +30,7 @@ let terminalBuffers = new Map(); // Store terminal output for AI access
 let fileWatchers = new Map();
 let outputChannels = new Map(); // Store output from different sources
 
-function createWindow() {
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -67,7 +67,25 @@ function createWindow() {
 
   // Load the app
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:3000');
+    // Try different ports in order of preference
+    const ports = [3000, 3001, 3002, 5173];
+    let loaded = false;
+    
+    for (const port of ports) {
+      try {
+        await mainWindow.loadURL(`http://localhost:${port}`);
+        console.log(`✅ Loaded from http://localhost:${port}`);
+        loaded = true;
+        break;
+      } catch (err) {
+        console.log(`⚠️ Port ${port} not available, trying next...`);
+      }
+    }
+    
+    if (!loaded) {
+      console.error('❌ Could not connect to dev server on any port');
+    }
+    
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../../build/index.html'));

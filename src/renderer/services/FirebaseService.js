@@ -7,6 +7,22 @@ import {
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  updateDoc, 
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  addDoc,
+  serverTimestamp
+} from 'firebase/firestore';
 
 // Firebase configuration
 // Get these from Firebase Console: Project Settings > General > Your apps > Firebase SDK snippet
@@ -22,6 +38,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 
 // Sign up new user
 export const signUp = async (email, password, name) => {
@@ -162,5 +179,6 @@ export default {
   logout,
   getIdToken,
   onAuthChange,
-  getCurrentUser
+  getCurrentUser,
+  db
 };

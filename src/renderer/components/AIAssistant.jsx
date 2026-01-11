@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } f
 import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader } from 'react-icons/fi';
 import ClaudeService from '../services/ClaudeService';
 import AnalyticsService from '../services/AnalyticsService';
+import ProjectStateService from '../services/ProjectStateService';
 import './AIAssistant.css';
 
 // Debug flag - set to false to disable verbose logging in production
@@ -218,6 +219,12 @@ const AIAssistant = forwardRef(({ onClose, workspaceFolder, onOpenFolder, onFile
   const isSubmittingRef = useRef(false); // Guard against double submissions
   const lastSubmittedMessageRef = useRef(null); // Track last submitted message to prevent StrictMode duplicates
   const [retryContext, setRetryContext] = useState(null); // Store context for retry functionality
+  
+  // Layer 3: Conversation pruning state
+  const conversationSummary = useRef(''); // Store summary of old messages
+  const CONVERSATION_THRESHOLD = 30; // Start pruning after 30 messages
+  const KEEP_RECENT_MESSAGES = 25; // Keep last 25 messages
+  const KEEP_INITIAL_MESSAGES = 3; // Keep first 3 messages (project setup)
 
   // Retry function for failed auto-fix attempts
   const handleRetryAutoFix = async (context) => {
@@ -323,31 +330,71 @@ const AIAssistant = forwardRef(({ onClose, workspaceFolder, onOpenFolder, onFile
   // Create enhanced error message
   const createRetryErrorMessage = (errorMsg, command) => {
     const isConnectionError = errorMsg.includes('connect') || errorMsg.includes('fetch') || errorMsg.includes('ECONNREFUSED');
+    const isTimeout = errorMsg.includes('timeout') || errorMsg.includes('timed out');
+    const isRateLimit = errorMsg.includes('rate limit') || errorMsg.includes('429');
+    
+    let specificGuidance = '';
+    
+    if (isConnectionError) {
+      specificGuidance = `### 🔧 Backend Connection Issue
+
+The backend server is not reachable. To enable auto-fix:
+
+\`\`\`bash
+cd backend
+npm install  # If first time
+npm start    # Start backend server
+\`\`\`
+
+Wait for "Server running on port 5000" message, then click **Retry** below.`;
+    } else if (isTimeout) {
+      specificGuidance = `### ⏱️ Request Timeout
+
+The AI service took too long to respond. This can happen with complex fixes.
+
+**Try:**
+1. Click **Retry** button below
+2. Or simplify your question/command
+3. Or fix the error manually`;
+    } else if (isRateLimit) {
+      specificGuidance = `### 🚫 Rate Limit Exceeded
+
+Too many requests to the AI service. Wait 1-2 minutes and try again.
+
+**Options:**
+1. Wait and click **Retry** button
+2. Fix the error manually
+3. Continue with your project and auto-fix will work after cooldown`;
+    } else {
+      specificGuidance = `### 💡 Suggestions
+
+**Manual Fix Options:**
+1. Read the error message above carefully
+2. Fix the issue in your code directly
+3. Or ask me: "How do I fix: ${command?.substring(0, 40) || 'this error'}?"
+
+**Backend Issues:**
+- Ensure backend is running: \`cd backend && npm start\`
+- Check for firewall blocking port 5000
+- Verify ANTHROPIC_API_KEY in backend/.env`;
+    }
     
     return `## 🔴 Auto-Fix Failed
 
 **Error:** ${errorMsg}
 
-${isConnectionError ? `### 🔧 Quick Fix
+${specificGuidance}
 
-The backend server appears to be offline. Start it with:
+---
 
-\`\`\`bash
-cd backend && npm start
-\`\`\`
+### 🤔 What Is Auto-Fix?
 
-Then click the **Retry** button below.
+When a command fails, auto-fix automatically:
+1. Analyzes the error output
+2. Reads relevant project files  
+3. Generates and applies a complete fix
 
-` : ''}### 💡 What Happened?
-
-${isConnectionError 
-  ? '- The AI backend service is not running\n- Auto-fix requires the backend to communicate with Claude API\n- Your command failed and couldn\'t be automatically fixed'
-  : '- The AI service encountered an error\n- This could be due to API timeout, rate limits, or authentication issues\n- The command failed but auto-fix couldn\'t complete'
-}
-
-### ✅ What You Can Do
-
-1. **Start Backend** (if not running):\n   \`\`\`bash\n   cd backend && npm start\n   \`\`\`\n\n2. **Click Retry Button** below to try again\n\n3. **Manual Fix:** Run this in terminal:\n   \`\`\`bash\n   ${command}\n   \`\`\`\n\n4. **Ask for Help:** Type: "Help me fix: ${command.substring(0, 40)}..."`;
+It requires the backend server to communicate with Claude AI.`;
   };
 
   // Fetch subscription status on mount
@@ -581,17 +628,62 @@ ${isConnectionError
           : msg.content
       }));
 
+      // ============================================================
+      // LAYER 2: Extract and update project state (first 3 messages)
+      // ============================================================
+      if (conversationHistory.current.length <= KEEP_INITIAL_MESSAGES && 
+          !ProjectStateService.isInitialized()) {
+        console.log('🔍 [Layer 2] Extracting project state from initial messages...');
+        ProjectStateService.extractFromMessages(conversationHistory.current);
+      }
+
+      // ============================================================
+      // LAYER 3: Conversation pruning with summarization
+      // ============================================================
+      let prunedMessages = enhancedPrompt;
+      
+      if (conversationHistory.current.length > CONVERSATION_THRESHOLD) {
+        console.log(`📊 [Layer 3] Conversation has ${conversationHistory.current.length} messages, pruning...`);
+        
+        // Check if we need to generate a new summary
+        const messagesToSummarize = conversationHistory.current.slice(
+          KEEP_INITIAL_MESSAGES, 
+          -(KEEP_RECENT_MESSAGES)
+        );
+        
+        if (messagesToSummarize.length > 0 && !conversationSummary.current) {
+          try {
+            console.log(`📝 [Layer 3] Summarizing ${messagesToSummarize.length} old messages...`);
+            const summary = await ClaudeService.summarizeConversation(messagesToSummarize);
+            conversationSummary.current = summary;
+            console.log('✅ [Layer 3] Summary generated:', summary.substring(0, 100) + '...');
+          } catch (err) {
+            console.warn('⚠️ [Layer 3] Summarization failed, continuing without summary:', err);
+          }
+        }
+        
+        // Build pruned message array: [initial messages] + [recent messages]
+        const initialMessages = enhancedPrompt.slice(0, KEEP_INITIAL_MESSAGES);
+        const recentMessages = enhancedPrompt.slice(-KEEP_RECENT_MESSAGES);
+        prunedMessages = [...initialMessages, ...recentMessages];
+        
+        console.log(`✂️ [Layer 3] Pruned from ${enhancedPrompt.length} to ${prunedMessages.length} messages`);
+      }
+
       console.log('🚀 Starting Claude stream...');
 
       // Track AI request start
       const requestStartTime = Date.now();
       AnalyticsService.trackAIRequest('message_sent', {
-        message_length: enhancedPrompt[enhancedPrompt.length - 1].content.length
+        message_length: prunedMessages[prunedMessages.length - 1].content.length
       });
 
-      // Call Claude API with streaming
+      // Get project state to inject (Layer 2)
+      const projectStatePrompt = ProjectStateService.toSystemPrompt();
+
+      // Call Claude API with streaming (with all 3 layers)
       const response = await ClaudeService.getClaudeStream(
-        enhancedPrompt,
+        prunedMessages, // Layer 3: Pruned messages
         (chunk, fullText) => {
           // Update the streaming message with new content
           setMessages(prev => prev.map(msg =>
@@ -601,7 +693,10 @@ ${isConnectionError
           ));
         },
         20000,
-        abortControllerRef.current.signal
+        abortControllerRef.current.signal,
+        null, // systemPrompt (backend has default)
+        projectStatePrompt, // Layer 2: Project state
+        conversationSummary.current // Layer 3: Conversation summary
       );
 
       console.log('🤖 Claude stream completed:', response);
@@ -1242,50 +1337,93 @@ Could you provide more details about what you'd like to build?`;
           ]);
 
           // Get COMPLETE workspace context for better error analysis - include ALL file contents
+          // Extract file paths from error message
+          const extractFilesFromError = (errorText) => {
+            const files = new Set();
+            // Match common error patterns: file.js:line:col, at file.js:line, in /path/to/file.js
+            const patterns = [
+              /([\w\/\.-]+\.(?:js|jsx|ts|tsx|json|css|html)):(\d+)/g,
+              /at\s+([\w\/\.-]+\.(?:js|jsx|ts|tsx))/g,
+              /in\s+([\w\/\.-]+\.(?:js|jsx|ts|tsx|json))/g,
+              /Cannot find module '([^']+)'/g,
+              /Error in ([\w\/\.-]+\.(?:js|jsx|ts|tsx))/g
+            ];
+            
+            for (const pattern of patterns) {
+              const matches = errorText.matchAll(pattern);
+              for (const match of matches) {
+                const file = match[1];
+                if (file && !file.includes('node_modules')) {
+                  files.add(file);
+                }
+              }
+            }
+            return Array.from(files);
+          };
+
+          const errorText = `${result.error || result.stderr || ''}`;
+          const filesInError = extractFilesFromError(errorText);
+          
           let workspaceContext = '';
           let allFileContents = '';
+          
           if (workspaceFolder && window.electronAPI.workspace) {
             try {
-              const scanResult = await window.electronAPI.workspace.scan(workspaceFolder);
-              if (scanResult.success) {
-                const fileList = scanResult.files.slice(0, 50).map(f => f.path).join('\n');
-                workspaceContext = `\n\n📁 PROJECT STRUCTURE:\n${fileList}${scanResult.files.length > 50 ? '\n... and more files' : ''}`;
-
-                // Read ONLY the most relevant files (package.json, config files, and a few source files)
-                const relevantExtensions = ['.json', '.js', '.jsx', '.ts', '.tsx'];
-                const priorityFiles = ['package.json', 'vite.config', 'tailwind.config', '.config.'];
-                const excludeFolders = ['node_modules', '.git', 'dist', 'build', '.next'];
-
-                const filesToRead = scanResult.files
-                  .filter(f => {
-                    const ext = f.path.substring(f.path.lastIndexOf('.'));
-                    const isRelevant = relevantExtensions.includes(ext);
-                    const isExcluded = excludeFolders.some(folder => f.path.includes(`/${folder}/`));
-                    const isPriority = priorityFiles.some(pf => f.path.includes(pf));
-                    return isRelevant && !isExcluded && (isPriority || f.path.split('/').length <= 2);
-                  })
-                  .slice(0, 5); // Read max 5 files to keep request size manageable
-
-                allFileContents = '\n\n📄 KEY FILE CONTENTS:';
-
-                for (const file of filesToRead) {
-                  const filePath = `${workspaceFolder}/${file.path}`;
+              // If error mentions specific files, read only those
+              if (filesInError.length > 0) {
+                console.log('📄 Reading files from error:', filesInError);
+                allFileContents = '\n\n📄 FILES MENTIONED IN ERROR:';
+                
+                for (const relPath of filesInError.slice(0, 3)) { // Max 3 files
+                  const filePath = relPath.startsWith('/') ? relPath : `${workspaceFolder}/${relPath}`;
                   try {
                     const fileResult = await window.electronAPI.fs.readFile(filePath);
                     if (fileResult.success && fileResult.content) {
-                      // Limit each file to 1000 chars to prevent overflow
-                      const content = fileResult.content.length > 1000
-                        ? fileResult.content.substring(0, 1000) + '\n... (truncated)'
+                      // Limit to 800 chars per file
+                      const content = fileResult.content.length > 800
+                        ? fileResult.content.substring(0, 800) + '\n... (truncated)'
                         : fileResult.content;
-                      allFileContents += `\n\n=== ${file.path} ===\n${content}`;
+                      allFileContents += `\n\n=== ${relPath} ===\n${content}`;
                     }
                   } catch (err) {
-                    // File doesn't exist or can't be read, skip it
+                    console.log(`Could not read ${relPath}`);
+                  }
+                }
+                
+                // Also read package.json if not already included
+                if (!filesInError.includes('package.json')) {
+                  try {
+                    const pkgResult = await window.electronAPI.fs.readFile(`${workspaceFolder}/package.json`);
+                    if (pkgResult.success) {
+                      allFileContents += `\n\n=== package.json ===\n${pkgResult.content.substring(0, 500)}`;
+                    }
+                  } catch (err) {}
+                }
+              } else {
+                // Fallback: scan for key files if error doesn't mention specific files
+                console.log('⚠️ No files in error, scanning for key files...');
+                const scanResult = await window.electronAPI.workspace.scan(workspaceFolder);
+                if (scanResult.success) {
+                  const priorityFiles = ['package.json', 'vite.config', 'tsconfig.json'];
+                  const filesToRead = scanResult.files
+                    .filter(f => priorityFiles.some(pf => f.path.includes(pf)))
+                    .slice(0, 2);
+                  
+                  allFileContents = '\n\n📄 KEY PROJECT FILES:';
+                  for (const file of filesToRead) {
+                    const filePath = `${workspaceFolder}/${file.path}`;
+                    try {
+                      const fileResult = await window.electronAPI.fs.readFile(filePath);
+                      if (fileResult.success && fileResult.content) {
+                        const content = fileResult.content.substring(0, 500) + '\n... (truncated)';
+                        allFileContents += `\n\n=== ${file.path} ===\n${content}`;
+                      }
+                    } catch (err) {}
                   }
                 }
               }
             } catch (err) {
-              console.error('Failed to get workspace context:', err);
+              console.error('Failed to read files:', err);
             }
           }
 
@@ -1320,8 +1458,10 @@ Could you provide more details about what you'd like to build?`;
 
                   // Get only the last 2 commands
                   const last2Commands = commandBlocks.slice(-2).join('\n\n---\n\n');
-
-                  terminalOutputContext = `\n\n📟 RECENT TERMINAL OUTPUT:\n\`\`\`\n${last2Commands || cleanOutput.slice(-1500)}\n\`\`\``;
+                  
+                  // Limit terminal output to 1000 chars
+                  const limitedOutput = (last2Commands || cleanOutput.slice(-1000)).substring(0, 1000);
+                  terminalOutputContext = `\n\n📟 RECENT TERMINAL OUTPUT:\n\`\`\`\n${limitedOutput}\n\`\`\``;
                 }
               }
             }
@@ -1329,22 +1469,158 @@ Could you provide more details about what you'd like to build?`;
             debug('Could not get terminal context:', err);
           }
 
+          // Analyze error type and provide targeted context
+          const analyzeErrorType = (errorText, stdoutText) => {
+            const combined = `${errorText} ${stdoutText}`.toLowerCase();
+            
+            if (combined.includes('cannot find module') || combined.includes('module not found') || combined.includes('cannot resolve')) {
+              return 'MISSING_DEPENDENCY';
+            }
+            if (combined.includes('enoent') || combined.includes('no such file')) {
+              return 'FILE_NOT_FOUND';
+            }
+            if (combined.includes('syntaxerror') || combined.includes('unexpected token') || combined.includes('parse error')) {
+              return 'SYNTAX_ERROR';
+            }
+            if (combined.includes('eaddrinuse') || combined.includes('port') && combined.includes('already in use')) {
+              return 'PORT_IN_USE';
+            }
+            if (combined.includes('permission denied') || combined.includes('eacces')) {
+              return 'PERMISSION_ERROR';
+            }
+            if (combined.includes('command not found') || combined.includes('is not recognized')) {
+              return 'COMMAND_NOT_FOUND';
+            }
+            if (combined.includes('npm err!') || combined.includes('yarn error')) {
+              return 'PACKAGE_MANAGER_ERROR';
+            }
+            if (combined.includes('failed to compile') || combined.includes('compilation error')) {
+              return 'COMPILATION_ERROR';
+            }
+            return 'UNKNOWN';
+          };
+
+          const errorType = analyzeErrorType(result.error || result.stderr || '', result.stdout || '');
+          
+          // Build targeted error message based on error type
+          let errorAnalysis = '';
+          let suggestedActions = '';
+          
+          switch(errorType) {
+            case 'MISSING_DEPENDENCY':
+              errorAnalysis = '**Error Type:** Missing Module/Dependency';
+              suggestedActions = `
+**Required Actions:**
+1. Identify the missing package name from the error
+2. Add it to package.json dependencies
+3. Provide the COMPLETE updated package.json file with filename=package.json
+4. Then provide command: \`\`\`bash
+npm install
+\`\`\`
+
+**Example Fix:**
+\`\`\`json filename=package.json
+{
+  "name": "project",
+  "dependencies": {
+    "missing-package": "^1.0.0"
+  }
+}
+\`\`\``;
+              break;
+              
+            case 'FILE_NOT_FOUND':
+              errorAnalysis = '**Error Type:** Missing File or Directory';
+              suggestedActions = `
+**Required Actions:**
+1. Identify which file/directory is missing
+2. Create the missing file with complete, working code
+3. Use filename= format:
+\`\`\`language filename=path/to/file.ext
+(complete code)
+\`\`\`
+
+Do NOT just create empty files. Provide working implementation.`;
+              break;
+              
+            case 'SYNTAX_ERROR':
+              errorAnalysis = '**Error Type:** Syntax Error in Code';
+              suggestedActions = `
+**Required Actions:**
+1. Locate the exact file and line with syntax error
+2. Fix the syntax error completely
+3. Provide the COMPLETE corrected file with filename=
+4. Verify all brackets, quotes, and parentheses are balanced
+5. Check for missing semicolons, commas, or closing tags
+
+Provide the ENTIRE file contents, not just the fixed line.`;
+              break;
+              
+            case 'PORT_IN_USE':
+              errorAnalysis = '**Error Type:** Port Already in Use';
+              suggestedActions = `
+**Required Actions:**
+1. Change port in configuration file (vite.config.js, server.js, etc.)
+2. Provide updated config file with filename=
+3. Or suggest command to kill the process on that port
+
+Example:
+\`\`\`javascript filename=vite.config.js
+export default {
+  server: { port: 5174 } // Changed from 5173
+}
+\`\`\``;
+              break;
+              
+            case 'COMMAND_NOT_FOUND':
+              errorAnalysis = '**Error Type:** Command Not Found';
+              suggestedActions = `
+**Required Actions:**
+1. Identify what tool/command is missing (node, npm, vite, etc.)
+2. Provide installation instructions
+3. Or provide alternative command that works
+4. Or update package.json scripts if command is incorrect`;
+              break;
+              
+            case 'COMPILATION_ERROR':
+              errorAnalysis = '**Error Type:** Build/Compilation Failed';
+              suggestedActions = `
+**Required Actions:**
+1. Read the compilation error carefully to find the problematic file
+2. Fix ALL issues in that file (imports, types, syntax)
+3. Provide COMPLETE fixed file with filename=
+4. Ensure all imports are correct
+5. Ensure all exports match usage`;
+              break;
+              
+            default:
+              errorAnalysis = '**Error Type:** Unknown - Requires Detailed Analysis';
+              suggestedActions = `
+**Required Actions:**
+1. Carefully read ENTIRE error output
+2. Identify root cause from error messages
+3. Provide complete fix with filename= format
+4. Include any necessary commands in bash blocks`;
+          }
+
           // Build comprehensive error message with FULL project context
           const errorMessage = {
             role: 'user',
-            content: `🔴 COMMAND FAILED - FIX IT NOW
+            content: `🔴 COMMAND FAILED - PROVIDE COMPLETE FIX
 
-Command that failed:
+${errorAnalysis}
+
+**Failed Command:**
 \`\`\`bash
 ${command}
 \`\`\`
 
-Error output:
+**Error Output:**
 \`\`\`
 ${result.error || result.stderr || 'Unknown error'}
 \`\`\`
 
-Standard output:
+**Standard Output:**
 \`\`\`
 ${result.stdout || 'No output'}
 \`\`\`
@@ -1352,18 +1628,23 @@ ${workspaceContext}
 ${allFileContents}
 ${terminalOutputContext}
 
-Working directory: ${workspaceFolder || 'Not set'}
+**Working Directory:** ${workspaceFolder || 'Not set'}
 
-🔧 ACTION REQUIRED:
-1. Analyze the error and file contents
-2. Identify root cause (missing deps, syntax errors, imports, config issues)
-3. Provide COMPLETE FIX with filename= format:
-   \`\`\`language filename=path/file.ext
-   (complete fixed code)
-   \`\`\`
-4. Include commands needed: \`\`\`bash
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${suggestedActions}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Provide complete fixed files, not explanations.`
+⚠️ CRITICAL RULES:
+• Provide COMPLETE file contents, not snippets or partial fixes
+• Use filename= format for ALL code blocks
+• Do NOT just explain - provide actual working code
+• Do NOT repeat the same failed command without fixing root cause
+• Test logic in your mind before responding
+
+Response format:
+1. Brief 1-line diagnosis
+2. Complete fixed files with filename=
+3. Commands needed (if any) in bash blocks`
           };
 
           conversationHistory.current.push(errorMessage);
@@ -1384,9 +1665,10 @@ Provide complete fixed files, not explanations.`
             console.log('🔧 Asking AI to fix the error...');
             console.log('📋 Error message context:', errorMessage.content.substring(0, 200));
 
-            // Build full conversation context for the fix request
+            // Build minimal conversation context for the fix request
+            // Only include last 2 messages to prevent payload overflow
             const fixConversation = [
-              ...conversationHistory.current.slice(-6), // Include last 6 messages for context
+              ...conversationHistory.current.slice(-2), // Only last 2 messages
               errorMessage
             ];
 
@@ -1401,6 +1683,33 @@ Provide complete fixed files, not explanations.`
 
             if (fixResponse && fixResponse.success && fixResponse.message) {
               console.log('✅ Updating fix message...');
+
+              // Validate that AI provided actual fixes, not just explanations
+              const hasCodeBlocks = fixResponse.message.includes('```') && fixResponse.message.includes('filename=');
+              const hasCommands = fixResponse.message.includes('```bash') || fixResponse.message.includes('```sh');
+              
+              if (!hasCodeBlocks && !hasCommands) {
+                console.warn('⚠️ AI response lacks actionable fixes (no filename= blocks or commands)');
+                
+                // Remove auto-fix status message
+                setMessages(prev => prev.filter(msg => msg.id !== autoFixStatusId));
+                
+                // Show the response but add a warning
+                setMessages(prev => {
+                  const filtered = prev.filter(msg => msg.id !== fixMessageId);
+                  return [
+                    ...filtered,
+                    {
+                      id: Date.now() + Math.random(),
+                      role: 'assistant',
+                      content: `${fixResponse.message}\n\n---\n\n⚠️ **Note:** The AI provided suggestions but no complete file fixes. You may need to:\n1. Ask it to provide complete files with \`filename=\`\n2. Or manually implement the suggestions above\n3. Or try: "Provide the complete fixed file for [filename]"`
+                    }
+                  ];
+                });
+                
+                setIsLoading(false);
+                return; // Don't try to process files/commands
+              }
 
               // Remove streaming placeholder and add real response
               setMessages(prev => {
@@ -1433,17 +1742,43 @@ Provide complete fixed files, not explanations.`
                   console.log('📋 Found fix commands:', fixCommands.length);
                   console.log('📄 Found fix code blocks:', fixCodeBlocks.length);
 
+                  let actionsTaken = [];
+
                   if (fixCodeBlocks.length > 0) {
                     console.log('📁 Creating fix files first...');
                     await handleCreateFilesAutomatically(fixResponse.message, fixAssistantMessage.id);
+                    actionsTaken.push(`${fixCodeBlocks.length} file(s) created/updated`);
                   }
 
                   if (fixCommands.length > 0) {
                     console.log('⚡ Executing fix commands...');
                     await executeCommandsAutomatically(fixResponse.message);
+                    actionsTaken.push(`${fixCommands.length} command(s) executed`);
+                  }
+
+                  // Add success notification if any actions were taken
+                  if (actionsTaken.length > 0) {
+                    setMessages(prev => [
+                      ...prev,
+                      {
+                        id: `autofix-success-${Date.now()}`,
+                        role: 'system',
+                        content: `✅ **Auto-fix completed**\n\n${actionsTaken.join(' • ')}\n\nMonitor terminal output to verify the fix worked.`,
+                        isSuccess: true
+                      }
+                    ]);
                   }
                 } catch (err) {
                   console.error('❌ Error processing fix response:', err);
+                  setMessages(prev => [
+                    ...prev,
+                    {
+                      id: `autofix-error-${Date.now()}`,
+                      role: 'system',
+                      content: `⚠️ **Auto-fix processing error**\n\nThe AI provided a fix but there was an issue applying it: ${err.message}\n\nYou may need to apply the fix manually from the response above.`,
+                      isError: true
+                    }
+                  ]);
                 }
               }, WORKSPACE_SCAN_DELAY);
             } else {

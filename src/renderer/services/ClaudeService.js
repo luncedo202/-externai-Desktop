@@ -28,6 +28,13 @@ async function getClaudeCompletion(prompt, maxTokens = 20000, timeout = 60000) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
       
+      // Clean messages - remove id, isStreaming, and other UI-specific properties
+      const cleanMessages = (Array.isArray(prompt) ? prompt : [{ role: 'user', content: prompt }])
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
+      
       response = await fetch(`${BACKEND_URL}/api/claude/stream`, {
         method: 'POST',
         headers: {
@@ -35,7 +42,7 @@ async function getClaudeCompletion(prompt, maxTokens = 20000, timeout = 60000) {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          messages: Array.isArray(prompt) ? prompt : [{ role: 'user', content: prompt }],
+          messages: cleanMessages,
           max_tokens: maxTokens
         }),
         signal: controller.signal
@@ -115,7 +122,7 @@ async function getClaudeCompletion(prompt, maxTokens = 20000, timeout = 60000) {
   }
 }
 
-async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null, systemPrompt = null) {
+async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null, systemPrompt = null, projectState = null, conversationSummary = null) {
   console.log('[ClaudeService] Starting Claude stream via backend...');
   console.log('[ClaudeService] Backend URL:', BACKEND_URL);
 
@@ -128,6 +135,18 @@ async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null
 
     if (systemPrompt) {
       body.system = systemPrompt;
+    }
+    
+    // Layer 2: Inject project state
+    if (projectState) {
+      body.projectState = projectState;
+      console.log('[ClaudeService] Injecting project state');
+    }
+    
+    // Layer 3: Inject conversation summary
+    if (conversationSummary) {
+      body.conversationSummary = conversationSummary;
+      console.log('[ClaudeService] Injecting conversation summary');
     }
 
     let response;
@@ -272,6 +291,35 @@ export default {
       return await response.json();
     } catch (error) {
       console.error('[ClaudeService] Failed to get usage:', error);
+      throw error;
+    }
+  },
+
+  // Summarize conversation messages (Layer 3: Conversation pruning)
+  async summarizeConversation(messages) {
+    console.log('[ClaudeService] Summarizing', messages.length, 'messages...');
+    
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${BACKEND_URL}/api/claude/summarize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ messages })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Summarization failed: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('[ClaudeService] Summary generated:', result.summary.substring(0, 100) + '...');
+      return result.summary;
+    } catch (error) {
+      console.error('[ClaudeService] Summarization error:', error);
       throw error;
     }
   }
