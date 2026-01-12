@@ -69,7 +69,6 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development'
   });
 });
-});
 
 // Routes
 app.use('/api/claude', claudeRoutes);
