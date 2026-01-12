@@ -1,15 +1,7 @@
 const admin = require('firebase-admin');
 
-// Initialize Firebase Admin (use service account in production)
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-    })
-  });
-}
+// Firebase Admin is initialized in server.js
+// This middleware just uses the existing instance
 
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];

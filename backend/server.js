@@ -9,15 +9,36 @@ const claudeRoutes = require('./routes/claude');
 
 const app = express();
 
+// Validate required environment variables
+const requiredEnvVars = [
+  'FIREBASE_PROJECT_ID',
+  'FIREBASE_CLIENT_EMAIL',
+  'FIREBASE_PRIVATE_KEY',
+  'ANTHROPIC_API_KEY'
+];
+
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingEnvVars.join(', '));
+  console.error('Please set these variables in Railway or your .env file');
+  process.exit(1);
+}
+
 // Initialize Firebase Admin
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-    })
-  });
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+      })
+    });
+    console.log('✅ Firebase Admin initialized successfully');
+  } catch (error) {
+    console.error('❌ Firebase initialization failed:', error.message);
+    process.exit(1);
+  }
 }
 
 // Security middleware
@@ -63,12 +84,13 @@ app.use((req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0'; // Bind to all interfaces for Railway
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📍 Environment: ${process.env.NODE_ENV}`);
-  console.log(`🔐 CORS enabled for: ${process.env.ALLOWED_ORIGINS}`);
-  console.log(`🔥 Firebase Admin initialized`);
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 Server running on ${HOST}:${PORT}`);
+  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔐 CORS enabled for: ${process.env.ALLOWED_ORIGINS || '*'}`);
+  console.log(`✅ Firebase Admin initialized successfully`);
 });
 
 // Graceful shutdown
