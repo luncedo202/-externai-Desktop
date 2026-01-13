@@ -43,6 +43,7 @@ function App() {
   const [debugLogs, setDebugLogs] = useState([]);
   const [hasAiResponded, setHasAiResponded] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
+  const [devServerUrl, setDevServerUrl] = useState(null); // Track active dev server URL
   const aiAssistantRef = useRef(null);
 
   // Initialize analytics and check authentication on app start
@@ -92,7 +93,7 @@ function App() {
   const handleToggleTerminal = () => {
     const newPanelVisible = !panelVisible;
     setPanelVisible(newPanelVisible);
-    
+
     // If showing panel and no terminals exist, create one
     if (newPanelVisible && terminals.length === 0) {
       const newTerminal = {
@@ -257,6 +258,8 @@ function App() {
             f.id === activeFile ? { ...f, isDirty: false } : f
           )
         );
+        // Trigger auto-browser open after successful save
+        handleFileUpdate();
       }
     } else if (file && !file.path) {
       const result = await window.electronAPI.dialog.saveFile(file.name);
@@ -274,8 +277,34 @@ function App() {
                 : f
             )
           );
+          // Trigger auto-browser open after successful save
+          handleFileUpdate();
         }
       }
+    }
+  };
+
+  // Handler for dev server detection - called by AI when dev server starts
+  const handleDevServerDetected = (url) => {
+    console.log('🌐 Dev server detected:', url);
+    setDevServerUrl(url);
+  };
+
+  // Handler for file updates - auto-opens browser if dev server is running
+  const handleFileUpdate = async () => {
+    if (!devServerUrl) return; // No dev server running
+
+    console.log('📝 File updated, auto-opening browser at:', devServerUrl);
+
+    // Wait for HMR to process the update
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    // Open browser
+    try {
+      await window.electronAPI.shell.openExternal(devServerUrl);
+      console.log('✅ Browser opened successfully');
+    } catch (err) {
+      console.error('❌ Failed to open browser:', err);
     }
   };
 
@@ -462,6 +491,8 @@ function App() {
           workspaceFolder={workspaceFolder}
           onOpenFolder={handleOpenFolder}
           onFileCreated={handleFileCreatedByAI}
+          onDevServerDetected={handleDevServerDetected}
+          onFileUpdate={handleFileUpdate}
           onAddTask={handleAddTask}
           onUpdateTask={handleUpdateTask}
           explorerRefreshTrigger={explorerRefreshTrigger}
