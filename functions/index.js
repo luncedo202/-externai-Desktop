@@ -1,0 +1,44 @@
+const { onRequest } = require("firebase-functions/v2/https");
+const admin = require('firebase-admin');
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
+
+const app = express();
+
+// Security and middleware
+app.use(helmet());
+app.use(cors({ origin: true }));
+app.use(express.json());
+
+// Request logging (Cloud Functions automatically logs console.log)
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+    next();
+});
+
+// Import routes
+const claudeRoutes = require('./routes/claude');
+const paymentRoutes = require('./routes/payment');
+
+// Apply routes
+app.use('/api/claude', claudeRoutes);
+app.use('/api/payment', paymentRoutes);
+
+// Health check
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+// Export the app as a Cloud Function
+exports.api = onRequest({
+    memory: "512MiB",
+    timeoutSeconds: 300, // Important for long AI responses
+    region: "us-central1", // You can change this to your preferred region
+    secrets: ["ANTHROPIC_API_KEY"] // Add secrets here
+}, app);
