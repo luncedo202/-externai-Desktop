@@ -59,7 +59,7 @@ function AuthScreen({ onAuthSuccess }) {
         <div className="auth-content">
           <div className="auth-info">
             <div className="auth-logo-title">
-              <img src="../assets/externai-logo.png" alt="ExternAI Logo" className="auth-logo" />
+              {/* <img src="../assets/externai-logo.png" alt="ExternAI Logo" className="auth-logo" /> */}
               <h1>ExternAI</h1>
             </div>
             <p className="auth-description">

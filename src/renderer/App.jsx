@@ -32,7 +32,10 @@ function App() {
   const [explorerRefreshTrigger, setExplorerRefreshTrigger] = useState(0);
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [theme, setTheme] = useState(() => {
-    // Load theme from localStorage or default to 'dark'
+    // Always default to 'dark' in production
+    if (process.env.NODE_ENV === 'production') {
+      return 'dark';
+    }
     return localStorage.getItem('app_theme') || 'dark';
   });
 

@@ -63,7 +63,7 @@ const SplashScreen = ({ onLoadComplete }) => {
       {/* Main content */}
       <div className="splash-content">
         {/* Logo */}
-        <div className="splash-logo-container">
+        {/* <div className="splash-logo-container">
           <div className="splash-logo">
             <div className="logo-icon">
               <img
@@ -79,13 +79,7 @@ const SplashScreen = ({ onLoadComplete }) => {
             </div>
             <div className="logo-glow"></div>
           </div>
-
-          <h1 className="splash-title">
-            <span className="title-extern">extern</span>
-            <span className="title-ai">AI</span>
-          </h1>
-          <p className="splash-tagline">Your AI-Powered Development Environment</p>
-        </div>
+        </div> */}
 
         {/* Progress section */}
         <div className="splash-progress-section">
