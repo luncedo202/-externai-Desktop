@@ -6,6 +6,12 @@ const { authenticateToken } = require('../middleware/auth');
 
 const db = admin.firestore();
 
+// Sanitize API key - remove any newlines, carriage returns, tabs, or extra whitespace
+function getAnthropicApiKey() {
+    const key = process.env.ANTHROPIC_API_KEY || '';
+    return key.toString().replace(/[\r\n\t\s]/g, '').trim();
+}
+
 // Helper to get/create user usage document
 async function getUserUsage(userId) {
     const userRef = db.collection('users').doc(userId);
@@ -76,7 +82,7 @@ router.post('/summarize', authenticateToken, async (req, res) => {
                 headers: {
                     'Content-Type': 'application/json',
                     'anthropic-version': '2023-06-01',
-                    'x-api-key': process.env.ANTHROPIC_API_KEY
+                    'x-api-key': getAnthropicApiKey()
                 }
             }
         );
@@ -152,7 +158,7 @@ FORMAT:
             headers: {
                 'Content-Type': 'application/json',
                 'anthropic-version': '2023-06-01',
-                'x-api-key': process.env.ANTHROPIC_API_KEY
+                'x-api-key': getAnthropicApiKey()
             },
             data: {
                 model: 'claude-sonnet-4-5-20250929',
