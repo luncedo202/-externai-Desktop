@@ -277,7 +277,7 @@ const AIAssistant = forwardRef(({
           {
             id: Date.now(),
             role: 'system',
-            content: `🌐 **Application detected!**\n\nPreview is now active in the editor. Also opened in browser: [${devServerUrl}](${devServerUrl})`,
+            content: `Server running at ${devServerUrl}`,
           }
         ]);
       }
@@ -673,7 +673,7 @@ It requires the backend server to communicate with Claude AI.`;
             const analyzingMsgId = `analyzing-${Date.now()}`;
             setMessages(prev => prev.map(msg => 
               msg.id === streamingMessageId 
-                ? { ...msg, content: `🔍 **Analyzing your project...**\n\nReading ${filesToRead.length} files to understand the codebase...` }
+                ? { ...msg, content: `Gathering workspace context...` }
                 : msg
             ));
 
@@ -683,7 +683,7 @@ It requires the backend server to communicate with Claude AI.`;
                 // Update status to show current file being read
                 setMessages(prev => prev.map(msg => 
                   msg.id === streamingMessageId 
-                    ? { ...msg, content: `🔍 **Analyzing your project...**\n\n📄 Reading: \`${file.relativePath}\`` }
+                    ? { ...msg, content: `Reading ${file.relativePath}` }
                     : msg
                 ));
                 
@@ -706,7 +706,7 @@ It requires the backend server to communicate with Claude AI.`;
             // Update status to show analysis complete
             setMessages(prev => prev.map(msg => 
               msg.id === streamingMessageId 
-                ? { ...msg, content: `🔍 **Analysis complete!**\n\n✅ Read ${filesToRead.length} files\n\n💭 Thinking about your request...` }
+                ? { ...msg, content: `Analyzing and generating response...` }
                 : msg
             ));
 
@@ -1837,7 +1837,7 @@ Could you provide more details about what you'd like to build?`;
     setMessages(prev => [...prev, {
       id: Date.now(),
       role: 'system',
-      content: '⏹️ Command execution cancelled by user.'
+      content: 'Command cancelled.'
     }]);
   };
 
@@ -1905,19 +1905,12 @@ Could you provide more details about what you'd like to build?`;
         const isRunCommand = command.includes('npm run') || command.includes('npm start') ||
           command.includes('yarn dev') || command.includes('pnpm dev');
 
-        let statusMessage = '⚙️ Running command...';
-        if (isInstallCommand) {
-          statusMessage = '📦 Installing dependencies... This may take a moment.';
-        } else if (isRunCommand) {
-          statusMessage = '🚀 Starting application...';
-        }
-
         setMessages(prev => [
           ...prev,
           {
             id: statusMessageId,
             role: 'system',
-            content: `${statusMessage}\n\n\`\`\`bash\n${command}\n\`\`\``,
+            content: `Running ${command}`,
             isWorking: true
           }
         ]);
@@ -2083,7 +2076,7 @@ Could you provide more details about what you'd like to build?`;
                     {
                       id: Date.now(),
                       role: 'system',
-                      content: `🌐 **Application started!**\n\nPreview is now active in the editor. Also opened in browser: [${detectedUrl}](${detectedUrl})`,
+                      content: `Server running at ${detectedUrl}`,
                     }
                   ]);
                 } catch (err) {
@@ -2107,13 +2100,10 @@ Could you provide more details about what you'd like to build?`;
             setMessages(prev => [...prev, {
               id: `error-analysis-${Date.now()}`,
               role: 'system',
-              content: `❌ **Command Failed**\n\n` +
-                `**Command:** \`${command}\`\n\n` +
-                `**Error Type:** ${errorAnalysis.type}\n\n` +
-                `**Issue:** ${errorAnalysis.issue}\n\n` +
-                (errorAnalysis.file ? `**File:** \`${errorAnalysis.file}\`\n\n` : '') +
-                (errorAnalysis.line ? `**Line:** ${errorAnalysis.line}\n\n` : '') +
-                `🔧 **Auto-fix will:** ${errorAnalysis.fixPlan}`
+              content: `Command failed: ${command}\n\n` +
+                `${errorAnalysis.type}: ${errorAnalysis.issue}` +
+                (errorAnalysis.file ? `\n\nFile: ${errorAnalysis.file}` : '') +
+                (errorAnalysis.line ? ` (line ${errorAnalysis.line})` : '')
             }]);
             
             // Build better context for auto-fix
@@ -2155,7 +2145,7 @@ Remember: Use filename= format for any code files you create or modify.`
                 {
                   id: fixStatusId,
                   role: 'system',
-                  content: '🔧 **Generating fix...**\n\nAnalyzing root cause and preparing solution...',
+                  content: 'Generating fix...',
                   isWorking: true
                 }
               ]);
@@ -2589,12 +2579,7 @@ Remember: Use filename= format for any code files you create or modify.`
 
     console.log('✨ Starting automatic file creation for', fileBlocks.length, 'code blocks');
 
-    // Show file creation overview
-    setMessages(prev => [...prev, {
-      id: `files-overview-${Date.now()}`,
-      role: 'system',
-      content: `📁 **Creating ${fileBlocks.length} file${fileBlocks.length > 1 ? 's' : ''}...**`
-    }]);
+    // Show file creation overview - removed, we show each file individually
 
     // Automatically create files with smart names
     let createdCount = 0;
@@ -2627,13 +2612,12 @@ Remember: Use filename= format for any code files you create or modify.`
         const checkResult = await window.electronAPI.fs.readFile(filePath);
         const isUpdating = checkResult.success;
         
-        // Show concise Copilot-style explanation with create/update indicator
-        const actionIcon = isUpdating ? '✏️' : '📄';
-        const actionWord = isUpdating ? 'Updating' : 'Creating';
+        // Show concise Copilot-style explanation
+        const actionWord = isUpdating ? 'Updated' : 'Created';
         setMessages(prev => [...prev, {
           id: `file-explain-${Date.now()}-${i}`,
           role: 'system',
-          content: `${actionIcon} ${actionWord} \`${fileName}\` — ${filePurpose}`,
+          content: `${actionWord} ${fileName} - ${filePurpose}`,
           isFileCreation: true
         }]);
 
