@@ -46,6 +46,10 @@ jobs:
         run: npm run postinstall || true
         continue-on-error: true
 
+      - name: Clean build directory
+        shell: bash
+        run: rm -rf build/ dist/
+        
       - name: Build Renderer
         run: npm run build
         env:
