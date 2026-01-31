@@ -77,6 +77,33 @@
   overflow: hidden;
 }
 
+/* Monaco Editor Line Numbers and Gutter */
+.editor-pane .monaco-editor .margin,
+.editor-pane .monaco-editor .margin-view-overlays {
+  background: var(--vscode-editor-bg) !important;
+}
+
+.editor-pane .monaco-editor .line-numbers {
+  color: #6e7681 !important;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, Monaco, monospace !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  padding-right: 12px !important;
+}
+
+.editor-pane .monaco-editor .current-line ~ .line-numbers {
+  color: #e8eaed !important;
+  font-weight: 500 !important;
+}
+
+[data-theme="light"] .editor-pane .monaco-editor .line-numbers {
+  color: #8b949e !important;
+}
+
+[data-theme="light"] .editor-pane .monaco-editor .current-line ~ .line-numbers {
+  color: #1f2328 !important;
+}
+
 .live-preview-iframe {
   flex: 1;
   width: 100%;

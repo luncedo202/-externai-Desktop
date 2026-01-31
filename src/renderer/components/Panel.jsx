@@ -19,7 +19,8 @@ function Panel({
   onClearOutput,
   onClearDiagnostics,
   onClearDebug,
-  theme
+  theme,
+  onUpdateTerminalStatus
 }) {
   const [activeTab, setActiveTab] = useState('terminal');
   const [activeTerminal, setActiveTerminal] = useState(null);
@@ -131,6 +132,28 @@ function Panel({
         window.electronAPI.terminal.onData((id, data) => {
           if (id === result.terminalId) {
             term.write(data);
+            
+            // Detect errors and success in terminal output
+            const lowerData = data.toLowerCase();
+            const errorPatterns = [
+              'error:', 'error ', 'failed', 'failure', 'exception',
+              'command not found', 'not found', 'permission denied',
+              'enoent', 'cannot find', 'npm err', 'fatal:', 'panic:'
+            ];
+            const successPatterns = [
+              'success', 'completed', 'done', 'built', 'compiled',
+              'listening on', 'server running', 'ready', 'started'
+            ];
+            
+            // Check for errors first
+            const hasError = errorPatterns.some(pattern => lowerData.includes(pattern));
+            const hasSuccess = successPatterns.some(pattern => lowerData.includes(pattern));
+            
+            if (hasError && onUpdateTerminalStatus) {
+              onUpdateTerminalStatus(terminalId, 'error');
+            } else if (hasSuccess && onUpdateTerminalStatus) {
+              onUpdateTerminalStatus(terminalId, 'success');
+            }
           }
         });
 

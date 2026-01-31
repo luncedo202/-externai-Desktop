@@ -147,10 +147,43 @@ function App() {
       });
     }
 
-    return () => {
-      // Cleanup listeners if needed
+    // Keyboard shortcuts
+    const handleKeyDown = (e) => {
+      // Cmd+S or Ctrl+S to save
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+      // Cmd+N or Ctrl+N for new file
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !e.shiftKey) {
+        e.preventDefault();
+        handleNewFile();
+      }
+      // Cmd+W or Ctrl+W to close current file
+      if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
+        e.preventDefault();
+        if (activeFile) {
+          handleCloseFile(activeFile);
+        }
+      }
+      // Cmd+` or Ctrl+` to toggle terminal
+      if ((e.metaKey || e.ctrlKey) && e.key === '`') {
+        e.preventDefault();
+        handleToggleTerminal();
+      }
+      // Cmd+B or Ctrl+B to toggle sidebar
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        setSidebarVisible(prev => !prev);
+      }
     };
-  }, [panelVisible, sidebarVisible]);
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [panelVisible, sidebarVisible, activeFile]);
 
   const lastProcessedLogIndexRef = useRef(-1);
 
@@ -548,6 +581,7 @@ function App() {
               onClearDiagnostics={() => setDiagnostics([])}
               onClearDebug={() => setDebugLogs([])}
               theme={theme}
+              onUpdateTerminalStatus={handleUpdateTerminalStatus}
             />
           )}
         </div>

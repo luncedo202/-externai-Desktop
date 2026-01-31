@@ -160,20 +160,55 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
                   onMount={handleEditorDidMount}
                   loading={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--vscode-fg)' }}>Loading editor...</div>}
                   options={{
+                    // Typography
                     fontSize: fontSize,
-                    fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, 'Courier New', monospace",
-                    minimap: { enabled: true },
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true,
+                    fontFamily: "'SF Mono', 'Fira Code', Menlo, Monaco, 'Courier New', monospace",
+                    lineHeight: 20,
+                    
+                    // Core editing - keep it simple
                     tabSize: tabSize,
                     insertSpaces: true,
-                    wordWrap: 'on',
+                    wordWrap: 'off',
+                    autoClosingBrackets: 'always',
+                    autoClosingQuotes: 'always',
+                    autoIndent: 'full',
+                    formatOnPaste: true,
+                    formatOnType: true,
+                    
+                    // Line numbers
                     lineNumbers: 'on',
-                    renderWhitespace: 'selection',
+                    lineNumbersMinChars: 3,
+                    
+                    // UI
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    folding: true,
+                    renderLineHighlight: 'line',
+                    
+                    // Cursor
+                    cursorStyle: 'line',
+                    cursorBlinking: 'blink',
+                    
+                    // Scrollbar
                     scrollbar: {
                       vertical: 'auto',
                       horizontal: 'auto',
                     },
+                    
+                    // Disable distracting features
+                    renderWhitespace: 'none',
+                    glyphMargin: false,
+                    quickSuggestions: true,
+                    suggestOnTriggerCharacters: true,
+                    acceptSuggestionOnEnter: 'on',
+                    
+                    // Make selection easier
+                    selectOnLineNumbers: true,
+                    roundedSelection: true,
+                    
+                    // Accessibility
+                    accessibilitySupport: 'auto',
                   }}
                 />
               )}

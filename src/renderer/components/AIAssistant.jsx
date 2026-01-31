@@ -596,7 +596,7 @@ It requires the backend server to communicate with Claude AI.`;
 
     setError(null);
 
-    // Generate unique message ID
+    // Generate message ID
     const userMessageId = Date.now();
 
     // Prevent duplicate from React StrictMode double-invocation only
@@ -626,7 +626,7 @@ It requires the backend server to communicate with Claude AI.`;
     // Create abort controller for this request
     abortControllerRef.current = new AbortController();
 
-    // Add a placeholder message for streaming (use different ID)
+    // Add a placeholder message for streaming
     const streamingMessageId = userMessageId + 1;
     setMessages(prev => [...prev, {
       id: streamingMessageId,
@@ -2317,17 +2317,7 @@ Could you provide more details about what you'd like to build?`;
         </div>
       )}
       <div className="ai-messages" ref={messagesContainerRef}>
-        {messages
-          // Filter out duplicate messages with same content and role
-          .filter((msg, idx, arr) => {
-            // Keep first occurrence of each message
-            const firstIdx = arr.findIndex(m =>
-              m.role === msg.role &&
-              m.content === msg.content
-            );
-            return firstIdx === idx;
-          })
-          .map((msg, idx) => {
+        {messages.map((msg, idx) => {
             const codeBlocks = extractCodeBlocks(msg.content);
             const hasCode = codeBlocks.length > 0;
 
@@ -2624,10 +2614,16 @@ Could you provide more details about what you'd like to build?`;
 
         <div className="ai-input-container">
           <div className="ai-input-glow"></div>
+          {/* Drop zone overlay - only show when dragging */}
+          {isDraggingOver && (
+            <div className="drop-zone-overlay">
+              <span>Drop image here...</span>
+            </div>
+          )}
           <div className="ai-input-inner">
             <textarea
               className="ai-input"
-              placeholder={isDraggingOver ? "Drop image here..." : "What would you like to build today?"}
+              placeholder="Describe what you want to build"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
