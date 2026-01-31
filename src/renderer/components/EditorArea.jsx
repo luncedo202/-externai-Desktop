@@ -3,12 +3,23 @@ import Editor from '@monaco-editor/react';
 import { FiX, FiMonitor, FiCode, FiUploadCloud } from 'react-icons/fi';
 import './EditorArea.css';
 
-function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onContentChange, onOpenFolder, theme, onPreviewClick, onPublishClick, onCursorChange, pendingPlan }) {
+function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onContentChange, onOpenFolder, theme, onPreviewClick, onPublishClick, onCursorChange, pendingPlan, devServerUrl }) {
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('http://localhost:3000');
   const [fontSize, setFontSize] = useState(12);
   const [tabSize, setTabSize] = useState(2);
   const currentFile = openFiles.find((f) => f.id === activeFile);
+
+  // Sync previewUrl with devServerUrl when it changes
+  useEffect(() => {
+    if (devServerUrl) {
+      setPreviewUrl(devServerUrl);
+      // Auto-show preview when dev server starts if not already shown
+      if (!showPreview) {
+        setShowPreview(true);
+      }
+    }
+  }, [devServerUrl]);
 
   // Debug logging for pendingPlan
   useEffect(() => {
@@ -73,8 +84,8 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
   };
 
   const handlePreviewClick = () => {
-    if (!showPreview && onPreviewClick) {
-      // Trigger AI to run the dev server
+    if (!showPreview && onPreviewClick && !devServerUrl) {
+      // Trigger AI to run the dev server ONLY if it's not already running
       onPreviewClick();
     }
     setShowPreview(!showPreview);
@@ -113,8 +124,8 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
             onClick={handlePreviewClick}
             title="Toggle Live Preview"
           >
-            {showPreview ? <FiCode size={16} /> : <FiMonitor size={16} />}
-            {showPreview ? 'Code' : 'Preview'}
+            <FiMonitor size={16} />
+            {showPreview ? 'Hide Preview' : 'Show Preview'}
           </button>
           <button
             className="toolbar-button"
@@ -136,34 +147,50 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
         </div>
       </div>
       <div className="editor-content" style={{ display: 'flex' }}>
-        {!showPreview && currentFile ? (
-          <Editor
-            height="100%"
-            language={currentFile.language}
-            value={currentFile.content}
-            onChange={handleEditorChange}
-            theme={monacoTheme}
-            onMount={handleEditorDidMount}
-            loading={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--vscode-fg)' }}>Loading editor...</div>}
-            options={{
-              fontSize: fontSize,
-              fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, 'Courier New', monospace",
-              minimap: { enabled: true },
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              tabSize: tabSize,
-              insertSpaces: true,
-              wordWrap: 'on',
-              lineNumbers: 'on',
-              renderWhitespace: 'selection',
-              scrollbar: {
-                vertical: 'auto',
-                horizontal: 'auto',
-              },
-            }}
-          />
-        ) : showPreview ? (
-          <div className="live-preview-container">
+        {openFiles.length > 0 ? (
+          <>
+            <div className="editor-pane" style={{ flex: 1, display: activeFile ? 'block' : 'none' }}>
+              {currentFile && (
+                <Editor
+                  height="100%"
+                  language={currentFile.language}
+                  value={currentFile.content}
+                  onChange={handleEditorChange}
+                  theme={monacoTheme}
+                  onMount={handleEditorDidMount}
+                  loading={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--vscode-fg)' }}>Loading editor...</div>}
+                  options={{
+                    fontSize: fontSize,
+                    fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, 'Courier New', monospace",
+                    minimap: { enabled: true },
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    tabSize: tabSize,
+                    insertSpaces: true,
+                    wordWrap: 'on',
+                    lineNumbers: 'on',
+                    renderWhitespace: 'selection',
+                    scrollbar: {
+                      vertical: 'auto',
+                      horizontal: 'auto',
+                    },
+                  }}
+                />
+              )}
+            </div>
+            {showPreview && (
+              <div className="live-preview-container" style={{ flex: 1, borderLeft: '1px solid var(--vscode-border)' }}>
+                <iframe
+                  src={previewUrl}
+                  className="live-preview-iframe"
+                  title="Live Preview"
+                  sandbox="allow-same-origin allow-scripts allow-forms"
+                />
+              </div>
+            )}
+          </>
+        ) : showPreview && !activeFile ? (
+          <div className="live-preview-container" style={{ flex: 1 }}>
             <iframe
               src={previewUrl}
               className="live-preview-iframe"

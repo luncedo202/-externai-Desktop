@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -22,6 +23,16 @@ app.use((req, res, next) => {
     next();
 });
 
+// Rate limiting middleware
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP'
+});
+
+// Apply rate limiting to all API routes
+app.use('/api/', limiter);
+
 // Import routes
 const claudeRoutes = require('./routes/claude');
 const paymentRoutes = require('./routes/payment');
@@ -30,9 +41,13 @@ const paymentRoutes = require('./routes/payment');
 app.use('/api/claude', claudeRoutes);
 app.use('/api/payment', paymentRoutes);
 
-// Health check
+// Health check route
 app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
 });
 
 // Export the app as a Cloud Function

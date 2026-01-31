@@ -83,62 +83,26 @@ router.post('/summarize', authenticateToken, async (req, res) => {
     }
 });
 
+// Claude API route
 router.post('/stream', authenticateToken, async (req, res) => {
     try {
-        const userId = req.userId;
-        const userData = await getUserUsage(userId);
-        const maxLifetimeRequests = parseInt(process.env.MAX_LIFETIME_REQUESTS) || 20;
+        const { messages, max_tokens } = req.body;
+        const apiKey = process.env.ANTHROPIC_API_KEY;
 
-        if (userData.usage.totalRequests >= maxLifetimeRequests) {
-            return res.status(403).json({ error: 'Free prompts exhausted' });
-        }
-
-        if (userData.usage.requestsToday >= userData.limits.maxRequestsPerDay) {
-            return res.status(429).json({ error: 'Daily limit exceeded' });
-        }
-
-        const { messages, max_tokens = 20000, system } = req.body;
-        const finalSystemPrompt = system || "You are a software developer...";
-
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-
-        const response = await axios.post(
-            'https://api.anthropic.com/v1/messages',
-            {
-                model: 'claude-sonnet-4-5-20250929',
-                max_tokens: Math.min(max_tokens, 20000),
-                messages,
-                stream: true,
-                system: finalSystemPrompt
+        const response = await axios.post('https://api.anthropic.com/v1/claude', {
+            messages,
+            max_tokens,
+        }, {
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
             },
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': process.env.ANTHROPIC_API_KEY,
-                    'anthropic-version': '2023-06-01'
-                },
-                responseType: 'stream'
-            }
-        );
-
-        let totalTokens = 0;
-        response.data.on('data', (chunk) => {
-            // Stream forwarding logic
-            res.write(chunk);
         });
 
-        response.data.on('end', async () => {
-            await db.collection('users').doc(userId).update({
-                'usage.requestsToday': admin.firestore.FieldValue.increment(1),
-                'usage.totalRequests': admin.firestore.FieldValue.increment(1)
-            });
-            res.end();
-        });
-
+        res.status(200).json(response.data);
     } catch (error) {
-        res.status(500).json({ error: 'Failed' });
+        console.error('Claude API error:', error);
+        res.status(500).json({ error: 'Failed to fetch Claude response' });
     }
 });
 

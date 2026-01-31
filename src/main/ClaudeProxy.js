@@ -26,15 +26,15 @@ ipcMain.handle('claude:stream', async (event, { prompt, maxTokens }) => {
   if (USE_PROXY && PROXY_SERVER_URL.includes('your-app')) {
     return { success: false, error: 'Proxy server not configured. Please set PROXY_SERVER_URL in .env file.' };
   }
-  
+
   // If using direct API, check for key
   if (!USE_PROXY && !CLAUDE_API_KEY) {
     return { success: false, error: 'Missing Anthropic API key' };
   }
-  
+
   const streamId = `stream_${Date.now()}`;
   const apiUrl = USE_PROXY ? CLAUDE_API_URL : DIRECT_API_URL;
-  
+
   const requestHeaders = USE_PROXY ? {
     'content-type': 'application/json',
   } : {
@@ -42,7 +42,7 @@ ipcMain.handle('claude:stream', async (event, { prompt, maxTokens }) => {
     'anthropic-version': '2023-06-01',
     'content-type': 'application/json',
   };
-  
+
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -261,15 +261,15 @@ Ready for next step? Reply 'continue' or give new instructions.
     for await (const chunk of response.body) {
       const text = chunk.toString();
       const lines = text.split('\n').filter(line => line.trim() !== '');
-      
+
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
           if (data === '[DONE]') continue;
-          
+
           try {
             const parsed = JSON.parse(data);
-            
+
             if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
               fullText += parsed.delta.text;
               // Send chunk to renderer
@@ -288,9 +288,9 @@ Ready for next step? Reply 'continue' or give new instructions.
 
     // Send completion event
     event.sender.send('claude:stream:done', { streamId, fullText });
-    
+
     return { success: true, streamId };
-    
+
   } catch (error) {
     console.error('[ClaudeProxy] Stream error:', error);
     event.sender.send('claude:stream:error', { streamId, error: error.message });
