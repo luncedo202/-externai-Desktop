@@ -247,6 +247,11 @@ const AIAssistant = forwardRef(({
   const [retryContext, setRetryContext] = useState(null); // Store context for retry functionality
   const workspaceFolderRef = useRef(workspaceFolder);
   const terminalOutputRef = useRef(''); // Track terminal output for PTY-based error detection
+  
+  // Command confirmation state
+  const [pendingCommands, setPendingCommands] = useState(null); // Commands awaiting user confirmation
+  const [isAutoFix, setIsAutoFix] = useState(false); // Whether pending commands are from auto-fix
+  const commandResolverRef = useRef(null); // Promise resolver for command confirmation
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -353,7 +358,7 @@ const AIAssistant = forwardRef(({
             }
 
             if (fixCommands.length > 0) {
-              await executeCommandsAutomatically(fixResponse.message);
+              await executeCommandsAutomatically(fixResponse.message, true);
             }
           } catch (err) {
             console.error('Error processing retry fix:', err);
@@ -664,9 +669,24 @@ It requires the backend server to communicate with Claude AI.`;
               })
               .slice(0, 20); // Read up to 20 files for context
 
+            // Show analyzing status
+            const analyzingMsgId = `analyzing-${Date.now()}`;
+            setMessages(prev => prev.map(msg => 
+              msg.id === streamingMessageId 
+                ? { ...msg, content: `🔍 **Analyzing your project...**\n\nReading ${filesToRead.length} files to understand the codebase...` }
+                : msg
+            ));
+
             for (const file of filesToRead) {
               const filePath = `${workspaceFolderRef.current}/${file.relativePath}`;
               try {
+                // Update status to show current file being read
+                setMessages(prev => prev.map(msg => 
+                  msg.id === streamingMessageId 
+                    ? { ...msg, content: `🔍 **Analyzing your project...**\n\n📄 Reading: \`${file.relativePath}\`` }
+                    : msg
+                ));
+                
                 const fileResult = await window.electronAPI.fs.readFile(filePath);
                 if (fileResult.success && fileResult.content) {
                   // Limit each file to 2000 chars to prevent overflow
@@ -675,10 +695,20 @@ It requires the backend server to communicate with Claude AI.`;
                     : fileResult.content;
                   workspaceContext += `\n\n--- ${file.relativePath} ---\n${content}\n`;
                 }
+                
+                // Small delay so user can see files being read
+                await new Promise(resolve => setTimeout(resolve, 50));
               } catch (err) {
                 // File doesn't exist or can't be read, skip it
               }
             }
+            
+            // Update status to show analysis complete
+            setMessages(prev => prev.map(msg => 
+              msg.id === streamingMessageId 
+                ? { ...msg, content: `🔍 **Analysis complete!**\n\n✅ Read ${filesToRead.length} files\n\n💭 Thinking about your request...` }
+                : msg
+            ));
 
             workspaceContext += `\n\nUse this COMPLETE context to understand the project structure, dependencies, and existing code.]\n`;
           }
@@ -1380,6 +1410,231 @@ Could you provide more details about what you'd like to build?`;
     return blocks;
   };
 
+  // Get human-readable file type description
+  const getFileTypeDescription = (extension) => {
+    const types = {
+      // JavaScript/TypeScript
+      'js': 'JavaScript file',
+      'jsx': 'React component (JSX)',
+      'ts': 'TypeScript file',
+      'tsx': 'React component (TypeScript)',
+      'mjs': 'ES Module JavaScript',
+      'cjs': 'CommonJS JavaScript',
+      
+      // Web
+      'html': 'HTML document',
+      'css': 'CSS stylesheet',
+      'scss': 'Sass stylesheet',
+      'sass': 'Sass stylesheet',
+      'less': 'LESS stylesheet',
+      
+      // Data/Config
+      'json': 'JSON configuration',
+      'yaml': 'YAML configuration',
+      'yml': 'YAML configuration',
+      'toml': 'TOML configuration',
+      'xml': 'XML document',
+      'env': 'Environment variables',
+      
+      // Python
+      'py': 'Python script',
+      'pyx': 'Cython file',
+      'ipynb': 'Jupyter notebook',
+      
+      // Other languages
+      'java': 'Java class',
+      'kt': 'Kotlin file',
+      'go': 'Go source file',
+      'rs': 'Rust source file',
+      'rb': 'Ruby script',
+      'php': 'PHP file',
+      'c': 'C source file',
+      'cpp': 'C++ source file',
+      'h': 'C/C++ header',
+      'swift': 'Swift source file',
+      
+      // Docs
+      'md': 'Markdown document',
+      'txt': 'Text file',
+      'rst': 'reStructuredText',
+      
+      // Shell
+      'sh': 'Shell script',
+      'bash': 'Bash script',
+      'zsh': 'Zsh script',
+      
+      // Config files
+      'gitignore': 'Git ignore rules',
+      'eslintrc': 'ESLint configuration',
+      'prettierrc': 'Prettier configuration',
+      'babelrc': 'Babel configuration',
+    };
+    
+    return types[extension] || `${extension.toUpperCase()} file`;
+  };
+
+  // Analyze file content to determine purpose
+  const getFilePurpose = (fileName, code, language) => {
+    const lowerName = fileName.toLowerCase();
+    const lowerCode = code.toLowerCase();
+    
+    // Check filename patterns
+    if (lowerName.includes('index')) return 'Entry point / main file for the module';
+    if (lowerName.includes('app.')) return 'Main application component';
+    if (lowerName.includes('main.')) return 'Application entry point';
+    if (lowerName.includes('config')) return 'Configuration settings';
+    if (lowerName.includes('utils') || lowerName.includes('helpers')) return 'Utility/helper functions';
+    if (lowerName.includes('types') || lowerName.includes('.d.ts')) return 'TypeScript type definitions';
+    if (lowerName.includes('test') || lowerName.includes('spec')) return 'Test file';
+    if (lowerName.includes('style') || lowerName.includes('.css')) return 'Component styling';
+    if (lowerName.includes('hook')) return 'React custom hook';
+    if (lowerName.includes('context')) return 'React context provider';
+    if (lowerName.includes('service')) return 'Service layer / API calls';
+    if (lowerName.includes('model')) return 'Data model / schema';
+    if (lowerName.includes('route')) return 'Route definitions';
+    if (lowerName.includes('middleware')) return 'Request middleware';
+    if (lowerName.includes('component')) return 'UI component';
+    if (lowerName === 'package.json') return 'Project dependencies and scripts';
+    if (lowerName === 'readme.md') return 'Project documentation';
+    if (lowerName === '.gitignore') return 'Files to exclude from version control';
+    if (lowerName === '.env' || lowerName.includes('.env.')) return 'Environment configuration';
+    if (lowerName === 'dockerfile') return 'Docker container configuration';
+    if (lowerName === 'vite.config' || lowerName.includes('webpack')) return 'Build tool configuration';
+    if (lowerName === 'tsconfig.json') return 'TypeScript compiler settings';
+    
+    // Check code patterns
+    if (lowerCode.includes('export default function') || lowerCode.includes('const') && lowerCode.includes('return (')) {
+      return 'React functional component';
+    }
+    if (lowerCode.includes('usestate') || lowerCode.includes('useeffect')) {
+      return 'React component with state/effects';
+    }
+    if (lowerCode.includes('express') || lowerCode.includes('app.get') || lowerCode.includes('app.post')) {
+      return 'Express.js server/routes';
+    }
+    if (lowerCode.includes('fetch(') || lowerCode.includes('axios')) {
+      return 'API communication layer';
+    }
+    if (lowerCode.includes('mongoose') || lowerCode.includes('sequelize')) {
+      return 'Database model/schema';
+    }
+    if (lowerCode.includes('class ') && lowerCode.includes('extends')) {
+      return 'Class-based component or module';
+    }
+    
+    // Default based on language
+    const langDefaults = {
+      'jsx': 'React component',
+      'tsx': 'React component (TypeScript)',
+      'css': 'Styles for the UI',
+      'html': 'Page structure',
+      'json': 'Data or configuration',
+      'py': 'Python script/module',
+    };
+    
+    return langDefaults[language] || 'Project file';
+  };
+
+  // Analyze error output to provide user-friendly explanation
+  const analyzeError = (errorOutput, command) => {
+    const lowerError = errorOutput.toLowerCase();
+    const result = {
+      type: 'Unknown Error',
+      issue: 'An error occurred during execution',
+      file: null,
+      line: null,
+      fixPlan: 'Analyze the error and provide a fix'
+    };
+    
+    // Extract file path from error (common patterns)
+    const filePatterns = [
+      /(?:in|at|file:?\s*)([\/\w\-\.]+\.[jstxcshtml]{2,4})(?::(\d+))?/i,
+      /([\/\w\-\.]+\.[jstxcshtml]{2,4}):(\d+)/i,
+      /Error in ([\/\w\-\.]+)/i,
+      /Cannot find module ['"]([^'"]+)['"]/i,
+    ];
+    
+    for (const pattern of filePatterns) {
+      const match = errorOutput.match(pattern);
+      if (match) {
+        result.file = match[1];
+        if (match[2]) result.line = match[2];
+        break;
+      }
+    }
+    
+    // Detect error type and provide explanation
+    if (lowerError.includes('cannot find module') || lowerError.includes('module not found')) {
+      const moduleMatch = errorOutput.match(/Cannot find module ['"]([^'"]+)['"]/i);
+      result.type = 'Missing Module';
+      result.issue = moduleMatch ? `The module "${moduleMatch[1]}" is not installed` : 'A required module is not installed';
+      result.fixPlan = 'Install the missing dependency with npm/yarn';
+    }
+    else if (lowerError.includes('command not found')) {
+      const cmdMatch = errorOutput.match(/(\w+):\s*command not found/i);
+      result.type = 'Command Not Found';
+      result.issue = cmdMatch ? `The command "${cmdMatch[1]}" is not available` : 'A command is not found in PATH';
+      result.fixPlan = 'Install the required tool or check PATH configuration';
+    }
+    else if (lowerError.includes('enoent') || lowerError.includes('no such file')) {
+      result.type = 'File Not Found';
+      result.issue = 'A required file or directory does not exist';
+      result.fixPlan = 'Create the missing file or fix the path';
+    }
+    else if (lowerError.includes('syntaxerror') || lowerError.includes('syntax error')) {
+      result.type = 'Syntax Error';
+      result.issue = 'There is a syntax error in the code';
+      result.fixPlan = 'Fix the syntax error in the affected file';
+    }
+    else if (lowerError.includes('typeerror')) {
+      result.type = 'Type Error';
+      result.issue = 'A value is being used incorrectly (wrong type)';
+      result.fixPlan = 'Fix the type mismatch in the code';
+    }
+    else if (lowerError.includes('referenceerror') || lowerError.includes('is not defined')) {
+      const varMatch = errorOutput.match(/(\w+) is not defined/i);
+      result.type = 'Reference Error';
+      result.issue = varMatch ? `"${varMatch[1]}" is not defined` : 'A variable or function is not defined';
+      result.fixPlan = 'Import or declare the missing variable/function';
+    }
+    else if (lowerError.includes('permission denied') || lowerError.includes('eacces')) {
+      result.type = 'Permission Error';
+      result.issue = 'Permission denied to access a file or resource';
+      result.fixPlan = 'Fix file permissions or run with elevated privileges';
+    }
+    else if (lowerError.includes('npm err!')) {
+      result.type = 'NPM Error';
+      if (lowerError.includes('404')) {
+        result.issue = 'Package not found in npm registry';
+        result.fixPlan = 'Check the package name for typos';
+      } else if (lowerError.includes('peer dep')) {
+        result.issue = 'Peer dependency conflict';
+        result.fixPlan = 'Resolve dependency version conflicts';
+      } else {
+        result.issue = 'An npm package installation error occurred';
+        result.fixPlan = 'Fix the npm configuration or package.json';
+      }
+    }
+    else if (lowerError.includes('failed to compile') || lowerError.includes('build failed')) {
+      result.type = 'Build Error';
+      result.issue = 'The project failed to compile';
+      result.fixPlan = 'Fix the compilation errors in the source code';
+    }
+    else if (lowerError.includes('port') && (lowerError.includes('in use') || lowerError.includes('eaddrinuse'))) {
+      const portMatch = errorOutput.match(/port (\d+)/i);
+      result.type = 'Port In Use';
+      result.issue = portMatch ? `Port ${portMatch[1]} is already in use` : 'The required port is already in use';
+      result.fixPlan = 'Kill the process using the port or use a different port';
+    }
+    else if (lowerError.includes('fatal:') && lowerError.includes('git')) {
+      result.type = 'Git Error';
+      result.issue = 'A git operation failed';
+      result.fixPlan = 'Fix the git configuration or repository state';
+    }
+    
+    return result;
+  };
+
   // Extract terminal commands from AI response
   const extractCommands = (content) => {
     const commands = [];
@@ -1425,10 +1680,51 @@ Could you provide more details about what you'd like to build?`;
     return filtered;
   };
 
+  // Request user confirmation before running commands
+  const requestCommandConfirmation = (commands, isAutoFixCommand = false) => {
+    return new Promise((resolve) => {
+      setPendingCommands(commands);
+      setIsAutoFix(isAutoFixCommand);
+      commandResolverRef.current = resolve;
+    });
+  };
+
+  // Handle user confirming commands
+  const handleConfirmCommands = () => {
+    if (commandResolverRef.current) {
+      commandResolverRef.current(true);
+      commandResolverRef.current = null;
+    }
+    setPendingCommands(null);
+    setIsAutoFix(false);
+  };
+
+  // Handle user cancelling commands
+  const handleCancelCommands = () => {
+    if (commandResolverRef.current) {
+      commandResolverRef.current(false);
+      commandResolverRef.current = null;
+    }
+    setPendingCommands(null);
+    setIsAutoFix(false);
+    setMessages(prev => [...prev, {
+      id: Date.now(),
+      role: 'system',
+      content: '⏹️ Command execution cancelled by user.'
+    }]);
+  };
+
   // Execute terminal commands automatically with loading UI
-  const executeCommandsAutomatically = async (messageContent) => {
+  const executeCommandsAutomatically = async (messageContent, isAutoFixCommand = false) => {
     const commands = extractCommands(messageContent);
     if (commands.length === 0) return;
+
+    // Request user confirmation before running
+    const confirmed = await requestCommandConfirmation(commands, isAutoFixCommand);
+    if (!confirmed) {
+      console.log('❌ User cancelled command execution');
+      return;
+    }
 
     // Wait if terminal is already busy (prevents command collision)
     if (isTerminalBusy) {
@@ -1677,6 +1973,22 @@ Could you provide more details about what you'd like to build?`;
             
             const errorOutput = commandOutput || 'Command failed with unknown error';
             
+            // Analyze the error to provide better context to user
+            const errorAnalysis = analyzeError(errorOutput, command);
+            
+            // Show detailed error analysis to user
+            setMessages(prev => [...prev, {
+              id: `error-analysis-${Date.now()}`,
+              role: 'system',
+              content: `❌ **Command Failed**\n\n` +
+                `**Command:** \`${command}\`\n\n` +
+                `**Error Type:** ${errorAnalysis.type}\n\n` +
+                `**Issue:** ${errorAnalysis.issue}\n\n` +
+                (errorAnalysis.file ? `**File:** \`${errorAnalysis.file}\`\n\n` : '') +
+                (errorAnalysis.line ? `**Line:** ${errorAnalysis.line}\n\n` : '') +
+                `🔧 **Auto-fix will:** ${errorAnalysis.fixPlan}`
+            }]);
+            
             // Build better context for auto-fix
             const errorContext = [
               ...conversationHistory.current.slice(-6), // Last 6 messages for more context
@@ -1716,7 +2028,7 @@ Remember: Use filename= format for any code files you create or modify.`
                 {
                   id: fixStatusId,
                   role: 'system',
-                  content: '🔧 **Auto-fixing error...**\n\nAnalyzing the error and generating a fix...',
+                  content: '🔧 **Generating fix...**\n\nAnalyzing root cause and preparing solution...',
                   isWorking: true
                 }
               ]);
@@ -1754,7 +2066,7 @@ Remember: Use filename= format for any code files you create or modify.`
                     
                     // Only run fix commands if terminal is not busy
                     if (fixCommands.length > 0 && !isTerminalBusy) {
-                      await executeCommandsAutomatically(fixResponse.message);
+                      await executeCommandsAutomatically(fixResponse.message, true);
                     } else if (fixCommands.length > 0) {
                       // Queue message to show user the commands to run
                       setMessages(prev => [...prev, {
@@ -2150,9 +2462,12 @@ Remember: Use filename= format for any code files you create or modify.`
 
     console.log('✨ Starting automatic file creation for', fileBlocks.length, 'code blocks');
 
-    // Show AI working status
-    const workingMessageId = `working-${Date.now()}`;
-    // File creation happens silently - no status message in chat
+    // Show file creation overview
+    setMessages(prev => [...prev, {
+      id: `files-overview-${Date.now()}`,
+      role: 'system',
+      content: `📁 **Creating ${fileBlocks.length} file${fileBlocks.length > 1 ? 's' : ''}...**`
+    }]);
 
     // Automatically create files with smart names
     let createdCount = 0;
@@ -2175,6 +2490,21 @@ Remember: Use filename= format for any code files you create or modify.`
         let fileName = block.filename;
 
         debug('📝 Using filename from AI:', fileName);
+        
+        // Generate explanation for this file
+        const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+        const fileType = getFileTypeDescription(fileExtension);
+        const filePurpose = getFilePurpose(fileName, block.code, block.language);
+        
+        // Show explanation message for this file
+        setMessages(prev => [...prev, {
+          id: `file-explain-${Date.now()}-${i}`,
+          role: 'system',
+          content: `📄 **Creating: \`${fileName}\`**\n\n` +
+            `**Type:** ${fileType}\n` +
+            `**Purpose:** ${filePurpose}`,
+          isFileCreation: true
+        }]);
 
         // Update with filename
         setCodeBlockStates(prev => ({
@@ -2457,6 +2787,47 @@ Remember: Use filename= format for any code files you create or modify.`
           <span>Check your API configuration</span>
         </div>
       )}
+      
+      {/* Command Confirmation Dialog */}
+      {pendingCommands && pendingCommands.length > 0 && (
+        <div className="command-confirmation-overlay">
+          <div className="command-confirmation-dialog">
+            <div className="confirmation-header">
+              <FiAlertCircle size={20} />
+              <h4>{isAutoFix ? '🔧 Auto-Fix Commands' : '⚡ Run Commands'}</h4>
+            </div>
+            <p className="confirmation-description">
+              {isAutoFix 
+                ? 'The AI wants to run these commands to fix the error:' 
+                : 'The AI wants to run these commands:'}
+            </p>
+            <div className="commands-list">
+              {pendingCommands.map((cmd, i) => (
+                <div key={i} className="command-item">
+                  <code>{cmd}</code>
+                </div>
+              ))}
+            </div>
+            <div className="confirmation-actions">
+              <button 
+                className="confirm-btn"
+                onClick={handleConfirmCommands}
+              >
+                <FiCheck size={16} />
+                Run {pendingCommands.length === 1 ? 'Command' : `${pendingCommands.length} Commands`}
+              </button>
+              <button 
+                className="cancel-btn"
+                onClick={handleCancelCommands}
+              >
+                <FiX size={16} />
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="ai-messages" ref={messagesContainerRef}>
         {messages.map((msg, idx) => {
             const codeBlocks = extractCodeBlocks(msg.content);
