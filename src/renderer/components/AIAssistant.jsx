@@ -1473,66 +1473,193 @@ Could you provide more details about what you'd like to build?`;
     return types[extension] || `${extension.toUpperCase()} file`;
   };
 
-  // Analyze file content to determine purpose
+  // Analyze file content to determine purpose - Copilot-style concise explanations
   const getFilePurpose = (fileName, code, language) => {
     const lowerName = fileName.toLowerCase();
     const lowerCode = code.toLowerCase();
+    const lines = code.split('\n').slice(0, 30).join('\n'); // First 30 lines for analysis
     
-    // Check filename patterns
-    if (lowerName.includes('index')) return 'Entry point / main file for the module';
-    if (lowerName.includes('app.')) return 'Main application component';
-    if (lowerName.includes('main.')) return 'Application entry point';
-    if (lowerName.includes('config')) return 'Configuration settings';
-    if (lowerName.includes('utils') || lowerName.includes('helpers')) return 'Utility/helper functions';
-    if (lowerName.includes('types') || lowerName.includes('.d.ts')) return 'TypeScript type definitions';
-    if (lowerName.includes('test') || lowerName.includes('spec')) return 'Test file';
-    if (lowerName.includes('style') || lowerName.includes('.css')) return 'Component styling';
-    if (lowerName.includes('hook')) return 'React custom hook';
-    if (lowerName.includes('context')) return 'React context provider';
-    if (lowerName.includes('service')) return 'Service layer / API calls';
-    if (lowerName.includes('model')) return 'Data model / schema';
-    if (lowerName.includes('route')) return 'Route definitions';
-    if (lowerName.includes('middleware')) return 'Request middleware';
-    if (lowerName.includes('component')) return 'UI component';
-    if (lowerName === 'package.json') return 'Project dependencies and scripts';
-    if (lowerName === 'readme.md') return 'Project documentation';
-    if (lowerName === '.gitignore') return 'Files to exclude from version control';
-    if (lowerName === '.env' || lowerName.includes('.env.')) return 'Environment configuration';
-    if (lowerName === 'dockerfile') return 'Docker container configuration';
-    if (lowerName === 'vite.config' || lowerName.includes('webpack')) return 'Build tool configuration';
-    if (lowerName === 'tsconfig.json') return 'TypeScript compiler settings';
+    // Extract key identifiers from code
+    const functionMatch = code.match(/(?:function|const|let|var)\s+(\w+)/);
+    const classMatch = code.match(/class\s+(\w+)/);
+    const componentMatch = code.match(/(?:export\s+(?:default\s+)?)?(?:function|const)\s+(\w+).*?(?:return\s*\(|=>)/s);
+    const exportsMatch = code.match(/export\s+(?:default\s+)?(?:function|const|class)\s+(\w+)/);
     
-    // Check code patterns
-    if (lowerCode.includes('export default function') || lowerCode.includes('const') && lowerCode.includes('return (')) {
-      return 'React functional component';
-    }
-    if (lowerCode.includes('usestate') || lowerCode.includes('useeffect')) {
-      return 'React component with state/effects';
-    }
-    if (lowerCode.includes('express') || lowerCode.includes('app.get') || lowerCode.includes('app.post')) {
-      return 'Express.js server/routes';
-    }
+    // Check for specific patterns and give contextual descriptions
+    
+    // API/Fetch patterns
     if (lowerCode.includes('fetch(') || lowerCode.includes('axios')) {
-      return 'API communication layer';
-    }
-    if (lowerCode.includes('mongoose') || lowerCode.includes('sequelize')) {
-      return 'Database model/schema';
-    }
-    if (lowerCode.includes('class ') && lowerCode.includes('extends')) {
-      return 'Class-based component or module';
+      const endpoints = code.match(/['"`](\/api\/\w+|https?:\/\/[^'"`]+)['"`]/g);
+      if (endpoints) {
+        return `Handles API calls${endpoints.length > 1 ? ` to ${endpoints.length} endpoints` : ''}`;
+      }
+      return 'Handles HTTP requests and API communication';
     }
     
-    // Default based on language
-    const langDefaults = {
-      'jsx': 'React component',
-      'tsx': 'React component (TypeScript)',
-      'css': 'Styles for the UI',
-      'html': 'Page structure',
-      'json': 'Data or configuration',
-      'py': 'Python script/module',
-    };
+    // React hooks
+    if (lowerCode.includes('createcontext') || lowerCode.includes('usecontext')) {
+      const contextMatch = code.match(/(\w+)Context/i);
+      return contextMatch ? `Provides ${contextMatch[1]} state across components` : 'Shares state across components via Context';
+    }
     
-    return langDefaults[language] || 'Project file';
+    if (lowerCode.includes('usereducer')) {
+      return 'Manages complex state with reducer pattern';
+    }
+    
+    // Form handling
+    if (lowerCode.includes('onsubmit') || lowerCode.includes('handlesubmit')) {
+      const formType = lowerName.includes('login') ? 'login' : 
+                       lowerName.includes('signup') || lowerName.includes('register') ? 'registration' :
+                       lowerName.includes('contact') ? 'contact' : 'form';
+      return `Handles ${formType} form submission and validation`;
+    }
+    
+    // Authentication
+    if (lowerCode.includes('login') && lowerCode.includes('password')) {
+      return 'Authenticates users with credentials';
+    }
+    if (lowerCode.includes('logout') || lowerCode.includes('signout')) {
+      return 'Handles user session management';
+    }
+    if (lowerCode.includes('jwt') || lowerCode.includes('token')) {
+      return 'Manages authentication tokens';
+    }
+    
+    // Database/Models
+    if (lowerCode.includes('mongoose.schema') || lowerCode.includes('new schema')) {
+      const modelMatch = code.match(/mongoose\.model\(['"](\w+)['"]/i);
+      return modelMatch ? `Defines ${modelMatch[1]} database schema` : 'Defines MongoDB document schema';
+    }
+    if (lowerCode.includes('sequelize') || lowerCode.includes('model.init')) {
+      return 'Defines SQL database model';
+    }
+    
+    // Express routes
+    if (lowerCode.includes('router.get') || lowerCode.includes('router.post') || 
+        lowerCode.includes('app.get') || lowerCode.includes('app.post')) {
+      const routeCount = (code.match(/\.(get|post|put|delete|patch)\(/gi) || []).length;
+      return `Defines ${routeCount} API endpoint${routeCount > 1 ? 's' : ''}`;
+    }
+    
+    // Middleware
+    if (lowerCode.includes('req, res, next') || lowerCode.includes('(req, res)')) {
+      if (lowerName.includes('auth')) return 'Validates authentication on requests';
+      if (lowerName.includes('error')) return 'Handles errors and sends responses';
+      if (lowerName.includes('valid')) return 'Validates incoming request data';
+      return 'Processes requests before reaching routes';
+    }
+    
+    // React components - analyze what they render
+    if (componentMatch || (lowerCode.includes('return') && lowerCode.includes('<'))) {
+      const name = componentMatch?.[1] || exportsMatch?.[1] || '';
+      
+      // Check what the component renders/does
+      if (lowerCode.includes('<button') || lowerCode.includes('onclick')) {
+        return `Renders interactive ${name || 'button'} element`;
+      }
+      if (lowerCode.includes('<form')) {
+        return `Renders ${name || 'form'} with input fields`;
+      }
+      if (lowerCode.includes('<ul') || lowerCode.includes('<li') || lowerCode.includes('.map(')) {
+        return `Renders list of ${name.toLowerCase().replace('list', '') || 'items'}`;
+      }
+      if (lowerCode.includes('<table') || lowerCode.includes('<tr')) {
+        return `Displays data in table format`;
+      }
+      if (lowerCode.includes('<nav') || lowerName.includes('nav')) {
+        return 'Renders site navigation links';
+      }
+      if (lowerCode.includes('<header') || lowerName.includes('header')) {
+        return 'Renders page header and branding';
+      }
+      if (lowerCode.includes('<footer') || lowerName.includes('footer')) {
+        return 'Renders page footer content';
+      }
+      if (lowerCode.includes('modal') || lowerName.includes('modal')) {
+        return 'Displays overlay dialog/modal';
+      }
+      if (lowerCode.includes('<img') || lowerCode.includes('<svg')) {
+        return `Renders ${name || 'visual'} with images/icons`;
+      }
+      if (lowerCode.includes('loading') || lowerCode.includes('spinner')) {
+        return 'Shows loading state indicator';
+      }
+      if (name) {
+        return `Renders ${name} UI component`;
+      }
+    }
+    
+    // Utility functions
+    if (lowerName.includes('util') || lowerName.includes('helper')) {
+      const funcCount = (code.match(/(?:export\s+)?(?:const|function)\s+\w+/g) || []).length;
+      return `Provides ${funcCount} utility function${funcCount > 1 ? 's' : ''}`;
+    }
+    
+    // Styles
+    if (lowerName.endsWith('.css') || lowerName.endsWith('.scss')) {
+      const ruleCount = (code.match(/\{[^}]+\}/g) || []).length;
+      return `Defines ${ruleCount} style rule${ruleCount > 1 ? 's' : ''} for UI`;
+    }
+    
+    // Config files
+    if (lowerName === 'package.json') {
+      try {
+        const pkg = JSON.parse(code);
+        const depCount = Object.keys(pkg.dependencies || {}).length;
+        return `Configures project with ${depCount} dependencies`;
+      } catch {
+        return 'Defines project dependencies and scripts';
+      }
+    }
+    if (lowerName === 'tsconfig.json') return 'Configures TypeScript compiler options';
+    if (lowerName === 'vite.config') return 'Configures Vite build and dev server';
+    if (lowerName.includes('eslint')) return 'Configures code linting rules';
+    if (lowerName.includes('prettier')) return 'Configures code formatting rules';
+    if (lowerName === '.env') return 'Stores environment variables';
+    if (lowerName === '.gitignore') return 'Excludes files from version control';
+    
+    // Entry points
+    if (lowerName === 'index.js' || lowerName === 'index.jsx' || lowerName === 'index.ts' || lowerName === 'index.tsx') {
+      if (lowerCode.includes('createroot') || lowerCode.includes('reactdom')) {
+        return 'Mounts React app to DOM';
+      }
+      if (lowerCode.includes('express')) {
+        return 'Starts Express server';
+      }
+      return 'Entry point - bootstraps the application';
+    }
+    
+    if (lowerName === 'app.jsx' || lowerName === 'app.tsx' || lowerName === 'app.js') {
+      if (lowerCode.includes('route') || lowerCode.includes('router')) {
+        return 'Root component with route definitions';
+      }
+      return 'Root component - wraps entire application';
+    }
+    
+    // Server files
+    if (lowerName === 'server.js' || lowerName === 'server.ts') {
+      const port = code.match(/(?:port|PORT)[:\s=]+(\d+)/i);
+      return port ? `Starts server on port ${port[1]}` : 'Configures and starts the server';
+    }
+    
+    // Test files
+    if (lowerName.includes('.test.') || lowerName.includes('.spec.')) {
+      const testCount = (code.match(/(?:it|test)\s*\(/g) || []).length;
+      return `Contains ${testCount} test case${testCount > 1 ? 's' : ''}`;
+    }
+    
+    // Default: try to extract from function/class name
+    if (classMatch) {
+      return `Defines ${classMatch[1]} class`;
+    }
+    if (exportsMatch) {
+      return `Exports ${exportsMatch[1]} for use in other files`;
+    }
+    if (functionMatch) {
+      return `Implements ${functionMatch[1]} functionality`;
+    }
+    
+    return 'Project source file';
   };
 
   // Analyze error output to provide user-friendly explanation
@@ -2493,16 +2620,20 @@ Remember: Use filename= format for any code files you create or modify.`
         
         // Generate explanation for this file
         const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
-        const fileType = getFileTypeDescription(fileExtension);
         const filePurpose = getFilePurpose(fileName, block.code, block.language);
         
-        // Show explanation message for this file
+        // Check if file exists before showing message
+        let filePath = `${workspaceFolderRef.current}/${fileName}`;
+        const checkResult = await window.electronAPI.fs.readFile(filePath);
+        const isUpdating = checkResult.success;
+        
+        // Show concise Copilot-style explanation with create/update indicator
+        const actionIcon = isUpdating ? '✏️' : '📄';
+        const actionWord = isUpdating ? 'Updating' : 'Creating';
         setMessages(prev => [...prev, {
           id: `file-explain-${Date.now()}-${i}`,
           role: 'system',
-          content: `📄 **Creating: \`${fileName}\`**\n\n` +
-            `**Type:** ${fileType}\n` +
-            `**Purpose:** ${filePurpose}`,
+          content: `${actionIcon} ${actionWord} \`${fileName}\` — ${filePurpose}`,
           isFileCreation: true
         }]);
 
@@ -2511,14 +2642,8 @@ Remember: Use filename= format for any code files you create or modify.`
           ...prev,
           [blockId]: { status: 'creating', filename: fileName }
         }));
-
-        // Use the filename as-is - if file exists, it will be overwritten
-        // This allows the AI to edit existing files by using the same filename
-        let filePath = `${workspaceFolderRef.current}/${fileName}`;
-
-        // Check if file exists (for logging only)
-        const checkResult = await window.electronAPI.fs.readFile(filePath);
-        if (checkResult.success) {
+        
+        if (isUpdating) {
           debug('♻️ File exists, will be overwritten:', fileName);
         } else {
           debug('✅ Creating new file:', fileName);
