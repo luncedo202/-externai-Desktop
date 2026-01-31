@@ -1,7 +1,7 @@
 {
     "$schema": "https://json.schemastore.org/package.json",
     "name": "externai",
-    "version": "1.0.21",
+    "version": "1.0.22",
     "description": "ExternAI - AI-Powered Development Environment for web, mobile, and game development",
     "main": "src/main/main.js",
     "scripts": {
@@ -53,6 +53,7 @@
         "electron-updater": "^6.6.2",
         "express": "^5.1.0",
         "firebase": "^12.6.0",
+        "firebase-admin": "^13.6.0",
         "node-fetch": "^2.7.0",
         "node-pty": "^1.0.0",
         "react": "^18.2.0",

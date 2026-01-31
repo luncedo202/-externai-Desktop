@@ -9,7 +9,12 @@ const BACKEND_URL = 'https://api-bkrpnxig4a-uc.a.run.app'; // Firebase Cloud Fun
 async function getAuthToken() {
   try {
     const token = await FirebaseService.getIdToken();
-    return token;
+    // Sanitize token - remove any newlines, carriage returns, or other invalid header characters
+    const sanitizedToken = token ? token.toString().replace(/[\r\n\t]/g, '').trim() : null;
+    if (!sanitizedToken) {
+      throw new Error('Invalid token received');
+    }
+    return sanitizedToken;
   } catch (error) {
     throw new Error('Not authenticated. Please log in.');
   }

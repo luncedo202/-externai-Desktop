@@ -101,8 +101,11 @@ router.post('/stream', authenticateToken, async (req, res) => {
 
         res.status(200).json(response.data);
     } catch (error) {
-        console.error('Claude API error:', error);
-        res.status(500).json({ error: 'Failed to fetch Claude response' });
+        console.error('Claude API error:', error.response?.data || error.message);
+        res.status(500).json({
+            error: 'Failed to fetch Claude response',
+            details: error.response?.data || error.message
+        });
     }
 });
 

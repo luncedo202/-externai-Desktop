@@ -11,3 +11,4 @@ build/
 .env
 *.key
 secrets/
+service-account-key.json
