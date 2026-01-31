@@ -10,6 +10,7 @@ import SplashScreen from './components/SplashScreen';
 import FirebaseService from './services/FirebaseService';
 import AnalyticsService from './services/AnalyticsService';
 import PricingPlans from './components/PricingPlans';
+import NodeWarning from './components/NodeWarning';
 import './App.css';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
+  const [nodeStatus, setNodeStatus] = useState({ checked: false, installed: true });
   const [activeView, setActiveView] = useState('explorer');
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
@@ -55,6 +57,15 @@ function App() {
     // Initialize Google Analytics
     AnalyticsService.init();
     AnalyticsService.trackPageView('App Start');
+
+    // Check if Node.js is installed
+    const checkNode = async () => {
+      if (window.electronAPI?.system?.checkNode) {
+        const result = await window.electronAPI.system.checkNode();
+        setNodeStatus({ checked: true, ...result });
+      }
+    };
+    checkNode();
 
     const unsubscribe = FirebaseService.onAuthChange((user) => {
       if (user) {
@@ -568,6 +579,9 @@ function App() {
           onClose={() => setShowPricing(false)}
           userEmail={currentUser?.email}
         />
+      )}
+      {nodeStatus.checked && !nodeStatus.installed && (
+        <NodeWarning onDismiss={() => setNodeStatus(prev => ({ ...prev, installed: true }))} />
       )}
     </div>
   );

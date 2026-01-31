@@ -3,6 +3,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
+  // System checks
+  system: {
+    checkNode: () => ipcRenderer.invoke('system:checkNode'),
+    openExternal: (url) => ipcRenderer.invoke('system:openExternal', url),
+  },
+
   // File System
   fs: {
     readFile: (filePath) => ipcRenderer.invoke('fs:readFile', filePath),

@@ -1,0 +1,128 @@
+.node-warning-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+}
+
+.node-warning-modal {
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 500px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.node-warning-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.node-warning-modal h2 {
+  color: #fff;
+  font-size: 24px;
+  margin: 0 0 16px 0;
+  font-weight: 600;
+}
+
+.node-warning-modal p {
+  color: #ccc;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 24px 0;
+}
+
+.node-warning-modal code {
+  background: #2d2d2d;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: #4fc1ff;
+  font-size: 13px;
+}
+
+.node-warning-steps {
+  background: #252526;
+  border-radius: 8px;
+  padding: 16px 20px;
+  text-align: left;
+  margin-bottom: 16px;
+}
+
+.node-warning-steps h3 {
+  color: #fff;
+  font-size: 14px;
+  margin: 0 0 12px 0;
+  font-weight: 600;
+}
+
+.node-warning-steps ol {
+  margin: 0;
+  padding-left: 20px;
+  color: #ccc;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.node-warning-steps li {
+  margin-bottom: 4px;
+}
+
+.node-warning-note {
+  background: #2a2a40;
+  border-left: 3px solid #7c4dff;
+  padding: 12px 16px;
+  text-align: left;
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 24px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+.node-warning-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.node-warning-download {
+  background: #0e639c;
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.node-warning-download:hover {
+  background: #1177bb;
+}
+
+.node-warning-dismiss {
+  background: transparent;
+  color: #888;
+  border: 1px solid #3c3c3c;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.node-warning-dismiss:hover {
+  background: #2d2d2d;
+  color: #ccc;
+}

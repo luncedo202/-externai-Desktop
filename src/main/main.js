@@ -5,6 +5,18 @@ const path = require('path');
 const fs = require('fs').promises;
 const chokidar = require('chokidar');
 const Store = require('electron-store');
+const { execSync } = require('child_process');
+
+// Check if Node.js is installed
+function checkNodeInstalled() {
+  try {
+    const nodeVersion = execSync('node --version', { encoding: 'utf8', timeout: 5000 }).trim();
+    const npmVersion = execSync('npm --version', { encoding: 'utf8', timeout: 5000 }).trim();
+    return { installed: true, nodeVersion, npmVersion };
+  } catch (error) {
+    return { installed: false, nodeVersion: null, npmVersion: null };
+  }
+}
 
 // Secure storage for auth tokens
 const store = new Store({
@@ -215,6 +227,17 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
+// Check if Node.js is installed - called by renderer on startup
+ipcMain.handle('system:checkNode', async () => {
+  return checkNodeInstalled();
+});
+
+// Open external URL (for Node.js download link)
+ipcMain.handle('system:openExternal', async (event, url) => {
+  await shell.openExternal(url);
+  return { success: true };
+});
+
 // File System Operations
 ipcMain.handle('fs:readFile', async (event, filePath) => {
   try {
@@ -332,12 +355,56 @@ ipcMain.handle('terminal:create', (event, cwd) => {
     const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
     console.log('[Terminal] Attempting to spawn:', shell, 'in', cwd || process.env.HOME);
     
-    const ptyProcess = pty.spawn(shell, [], {
+    // Build enhanced PATH that includes common Node.js installation locations
+    const homedir = require('os').homedir();
+    const isWindows = process.platform === 'win32';
+    const pathSeparator = isWindows ? ';' : ':';
+    
+    let extraPaths;
+    if (isWindows) {
+      // Windows paths
+      extraPaths = [
+        'C:\\Program Files\\nodejs',
+        'C:\\Program Files (x86)\\nodejs',
+        `${homedir}\\AppData\\Roaming\\npm`,
+        `${homedir}\\AppData\\Local\\Yarn\\bin`,
+        `${homedir}\\AppData\\Local\\pnpm`,
+        `${homedir}\\.nvm\\versions\\node`,
+        'C:\\ProgramData\\nvm',
+      ].join(pathSeparator);
+    } else {
+      // macOS/Linux paths
+      extraPaths = [
+        '/usr/local/bin',
+        '/opt/homebrew/bin',
+        '/opt/homebrew/sbin',
+        `${homedir}/.nvm/versions/node/*/bin`,
+        `${homedir}/.npm-global/bin`,
+        `${homedir}/.yarn/bin`,
+        `${homedir}/.local/bin`,
+        '/usr/local/opt/node/bin',
+        '/usr/local/opt/node@18/bin',
+        '/usr/local/opt/node@20/bin',
+        '/usr/local/opt/node@22/bin',
+      ].join(pathSeparator);
+    }
+    
+    // Merge with existing PATH
+    const enhancedEnv = {
+      ...process.env,
+      PATH: `${extraPaths}${pathSeparator}${process.env.PATH || ''}`,
+    };
+    
+    // Spawn as LOGIN SHELL (-l flag) so it loads ~/.zshrc, ~/.bash_profile, etc.
+    // This makes it behave like Terminal.app
+    const shellArgs = isWindows ? [] : ['-l'];
+    
+    const ptyProcess = pty.spawn(shell, shellArgs, {
       name: 'xterm-256color',
       cols: 80,
       rows: 30,
       cwd: cwd || process.env.HOME || process.cwd(),
-      env: process.env,
+      env: enhancedEnv,
     });
 
     const terminalId = Date.now().toString();
@@ -489,9 +556,42 @@ ipcMain.handle('process:run', async (event, { command, cwd }) => {
       const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash';
       const args = process.platform === 'win32' ? ['/c', command] : ['-c', command];
       
+      // Build enhanced PATH
+      const homedir = require('os').homedir();
+      const isWindows = process.platform === 'win32';
+      const pathSeparator = isWindows ? ';' : ':';
+      
+      let extraPaths;
+      if (isWindows) {
+        // Windows paths
+        extraPaths = [
+          'C:\\Program Files\\nodejs',
+          'C:\\Program Files (x86)\\nodejs',
+          `${homedir}\\AppData\\Roaming\\npm`,
+          `${homedir}\\AppData\\Local\\Yarn\\bin`,
+          `${homedir}\\AppData\\Local\\pnpm`,
+        ].join(pathSeparator);
+      } else {
+        // macOS/Linux paths
+        extraPaths = [
+          '/usr/local/bin',
+          '/opt/homebrew/bin',
+          '/opt/homebrew/sbin',
+          `${homedir}/.nvm/versions/node/*/bin`,
+          `${homedir}/.npm-global/bin`,
+          `${homedir}/.yarn/bin`,
+          `${homedir}/.local/bin`,
+        ].join(pathSeparator);
+      }
+      
+      const enhancedEnv = {
+        ...process.env,
+        PATH: `${extraPaths}${pathSeparator}${process.env.PATH || ''}`,
+      };
+      
       const proc = spawn(shell, args, {
         cwd: cwd || process.cwd(),
-        env: process.env,
+        env: enhancedEnv,
       });
 
       let stdout = '';
@@ -883,7 +983,24 @@ ipcMain.handle('terminal:execute', async (event, { command, cwd }) => {
     console.log(`[Terminal] Executing: ${command}`);
     console.log(`[Terminal] Working directory: ${cwd}`);
     
-    exec(command, { cwd, timeout, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+    // Enhanced PATH for exec() to find Node.js/npm
+    const enhancedPath = [
+      '/opt/homebrew/bin',
+      '/usr/local/bin',
+      '/usr/bin',
+      '/bin',
+      '/usr/sbin',
+      '/sbin',
+      process.env.HOME + '/.nvm/versions/node/*/bin',
+      process.env.HOME + '/.nodenv/shims',
+      process.env.HOME + '/.fnm/aliases/default/bin',
+      process.env.HOME + '/.volta/bin',
+      process.env.PATH || ''
+    ].join(':');
+    
+    const execEnv = { ...process.env, PATH: enhancedPath };
+    
+    exec(command, { cwd, timeout, maxBuffer: 10 * 1024 * 1024, env: execEnv }, (error, stdout, stderr) => {
       if (error) {
         console.error(`[Terminal] Command failed: ${error.message}`);
         resolve({

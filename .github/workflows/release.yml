@@ -41,6 +41,12 @@ jobs:
         env:
           npm_config_build_from_source: true
 
+      - name: Clean ALL build artifacts
+        shell: bash
+        run: |
+          rm -rf build/ dist/ node_modules/.cache/
+          npm cache clean --force
+          
       - name: Rebuild native modules
         shell: bash
         run: npm run postinstall || true

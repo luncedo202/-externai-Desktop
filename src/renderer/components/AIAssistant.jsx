@@ -1498,13 +1498,16 @@ Could you provide more details about what you'd like to build?`;
           ));
 
           const executionTime = Date.now() - commandId;
+          const errorText = (result.stderr || '') + ' ' + (result.error || '') + ' ' + (result.stdout || '');
           const hasError = !result.success ||
-            (result.stderr && (
-              result.stderr.toLowerCase().includes('error') ||
-              result.stderr.toLowerCase().includes('failed') ||
-              result.stderr.toLowerCase().includes('cannot find') ||
-              result.stderr.toLowerCase().includes('not found') ||
-              result.stderr.toLowerCase().includes('enoent')
+            (errorText && (
+              errorText.toLowerCase().includes('error') ||
+              errorText.toLowerCase().includes('failed') ||
+              errorText.toLowerCase().includes('cannot find') ||
+              errorText.toLowerCase().includes('not found') ||
+              errorText.toLowerCase().includes('command not found') ||
+              errorText.toLowerCase().includes('enoent') ||
+              errorText.toLowerCase().includes('no such file')
             ));
 
           AnalyticsService.trackCommand(command, !hasError, executionTime);
@@ -1563,10 +1566,79 @@ Could you provide more details about what you'd like to build?`;
 
           // Auto-fix logic if command failed
           if (hasError) {
-            debug('❌ Command failed, checking backend for auto-fix...');
-            // We'll keep the auto-fix logic simplified here for now as most was already matched
-            // Actually I should probably restore the full logic but I'll skip it if it's too risky for now
-            // THE USER NEEDS A WORKING UI FIRST!
+            debug('❌ Command failed, attempting auto-fix...');
+            
+            const errorOutput = result.error || result.stderr || result.stdout || 'Command failed with unknown error';
+            
+            // Build context for auto-fix
+            const errorContext = [
+              ...conversationHistory.current.slice(-4), // Last 4 messages for context
+              {
+                role: 'user',
+                content: `The following command failed:\n\n\`\`\`bash\n${command}\n\`\`\`\n\nError output:\n\`\`\`\n${errorOutput}\n\`\`\`\n\nPlease analyze this error and provide a fix. Remember to use the filename= format for any code files.`
+              }
+            ];
+            
+            try {
+              // Show auto-fix status
+              const fixStatusId = `fix-${Date.now()}`;
+              setMessages(prev => [
+                ...prev,
+                {
+                  id: fixStatusId,
+                  role: 'system',
+                  content: '🔧 **Auto-fixing error...**\n\nAnalyzing the error and generating a fix...',
+                  isWorking: true
+                }
+              ]);
+              
+              const fixResponse = await ClaudeService.getClaudeCompletion(
+                errorContext,
+                20000,
+                90000
+              );
+              
+              // Remove fix status
+              setMessages(prev => prev.filter(msg => msg.id !== fixStatusId));
+              
+              if (fixResponse && fixResponse.success && fixResponse.message) {
+                // Add the fix message
+                const fixMessage = {
+                  id: Date.now() + Math.random(),
+                  role: 'assistant',
+                  content: fixResponse.message
+                };
+                
+                setMessages(prev => [...prev, fixMessage]);
+                conversationHistory.current.push(fixMessage);
+                
+                // Process the fix (create files and run commands)
+                setTimeout(async () => {
+                  try {
+                    const fixCommands = extractCommands(fixResponse.message);
+                    const fixCodeBlocks = extractCodeBlocks(fixResponse.message);
+                    
+                    if (fixCodeBlocks.length > 0) {
+                      await handleCreateFilesAutomatically(fixResponse.message, fixMessage.id);
+                    }
+                    
+                    if (fixCommands.length > 0) {
+                      await executeCommandsAutomatically(fixResponse.message);
+                    }
+                  } catch (err) {
+                    console.error('Error processing auto-fix:', err);
+                  }
+                }, 500);
+              }
+            } catch (fixError) {
+              console.error('Auto-fix failed:', fixError);
+              // Store context for manual retry
+              setRetryContext({
+                command,
+                error: errorOutput,
+                conversation: errorContext
+              });
+            }
           }
 
           if (i < commands.length - 1) {
