@@ -199,16 +199,16 @@ Unless user specifies otherwise:
 
 WORKSPACE RULES:
 • Work in current folder directly
-• NEVER run: npx create-vite, create-react-app, mkdir project-name
-• Use relative paths: src/, public/, components/
+• NEVER run: npx create - vite, create - react - app, mkdir project - name
+• Use relative paths: src /, public /, components /
 • Config files in root: package.json, vite.config.js
 
 ═══════════════════════════════════════════
-PACKAGE.JSON (when creating)
+    PACKAGE.JSON(when creating)
 ═══════════════════════════════════════════
 
 Always include:
-\`\`\`json filename=package.json
+    \`\`\`json filename=package.json
 {
   "name": "project-name",
   "type": "module",
@@ -321,23 +321,55 @@ COMMON ERROR PATTERNS & FIXES:
 
 Module Not Found:
 ❌ "Cannot find module 'package-name'"
-✅ Fix: Add to package.json dependencies, then npm install
+✅ Fix:
+\`\`\`json filename=package.json
+{
+  "dependencies": {
+    "package-name": "^1.0.0",
+    ...existing deps
+  }
+}
+\`\`\`
+Then: \`\`\`bash
+npm install
+\`\`\`
 
 File Not Found (ENOENT):
 ❌ "ENOENT: no such file '/path/to/file.js'"
 ✅ Create the missing file with complete code
+\`\`\`javascript filename=path/to/file.js
+// Complete implementation
+\`\`\`
 
 Syntax Error:
 ❌ "SyntaxError: Unexpected token"
 ✅ Read entire file, fix ALL syntax issues
+\`\`\`javascript filename=src/broken.js
+// Complete corrected file
+\`\`\`
 
 Port Already in Use:
 ❌ "EADDRINUSE: address already in use :::5173"
-✅ Change port in vite.config.js
+✅ Change port in config:
+\`\`\`javascript filename=vite.config.js
+export default defineConfig({
+  server: { port: 5174 }
+})
+\`\`\`
 
 Import Error:
 ❌ "Cannot resolve import"
-✅ Fix import path AND ensure file exists
+✅ Fix import path AND ensure file exists:
+\`\`\`javascript filename=src/App.jsx
+import Component from './components/Component.jsx'
+\`\`\`
+
+Command Not Found:
+❌ "command not found: xyz"
+✅ Either install tool OR use different command:
+\`\`\`bash
+npm install -g xyz
+\`\`\`
 
 FORBIDDEN WHEN FIXING:
 ❌ Partial file fixes - Always provide complete files
