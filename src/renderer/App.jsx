@@ -50,6 +50,7 @@ function App() {
   const [hasAiResponded, setHasAiResponded] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
   const [devServerUrl, setDevServerUrl] = useState(null); // Track active dev server URL
+  const [terminalOutputBuffer, setTerminalOutputBuffer] = useState(''); // PTY output for auto-fix
   const aiAssistantRef = useRef(null);
 
   // Initialize analytics and check authentication on app start
@@ -372,6 +373,11 @@ function App() {
     ));
   };
 
+  // Handler for terminal output - captures PTY output for auto-fix
+  const handleTerminalOutput = (terminalId, newData, fullBuffer) => {
+    setTerminalOutputBuffer(fullBuffer);
+  };
+
   const handleDevServerDetected = (url) => {
     console.log('🌐 Dev server detected:', url);
     setDevServerUrl(url);
@@ -582,6 +588,7 @@ function App() {
               onClearDebug={() => setDebugLogs([])}
               theme={theme}
               onUpdateTerminalStatus={handleUpdateTerminalStatus}
+              onTerminalOutput={handleTerminalOutput}
             />
           )}
         </div>
@@ -600,6 +607,7 @@ function App() {
           explorerRefreshTrigger={explorerRefreshTrigger}
           onFirstResponse={() => setHasAiResponded(true)}
           devServerUrl={devServerUrl}
+          terminalOutput={terminalOutputBuffer}
         />
       </div>
       <StatusBar

@@ -20,7 +20,8 @@ function Panel({
   onClearDiagnostics,
   onClearDebug,
   theme,
-  onUpdateTerminalStatus
+  onUpdateTerminalStatus,
+  onTerminalOutput
 }) {
   const [activeTab, setActiveTab] = useState('terminal');
   const [activeTerminal, setActiveTerminal] = useState(null);
@@ -28,6 +29,7 @@ function Panel({
   const terminalInstances = useRef({});
   const fitAddons = useRef({});
   const backendTerminalIds = useRef({}); // Store backend terminal IDs
+  const terminalOutputBuffer = useRef({}); // Store recent output per terminal
 
   const handleCloseTerminal = async (terminalId) => {
     // Close the terminal in the backend
@@ -133,8 +135,26 @@ function Panel({
           if (id === result.terminalId) {
             term.write(data);
             
+            // Strip ANSI codes for clean text
+            const cleanData = data.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '');
+            
+            // Buffer recent output (keep last 5000 chars)
+            if (!terminalOutputBuffer.current[terminalId]) {
+              terminalOutputBuffer.current[terminalId] = '';
+            }
+            terminalOutputBuffer.current[terminalId] += cleanData;
+            if (terminalOutputBuffer.current[terminalId].length > 5000) {
+              terminalOutputBuffer.current[terminalId] = 
+                terminalOutputBuffer.current[terminalId].slice(-5000);
+            }
+            
+            // Notify parent of terminal output (for auto-fix)
+            if (onTerminalOutput) {
+              onTerminalOutput(terminalId, cleanData, terminalOutputBuffer.current[terminalId]);
+            }
+            
             // Detect errors and success in terminal output
-            const lowerData = data.toLowerCase();
+            const lowerData = cleanData.toLowerCase();
             const errorPatterns = [
               'error:', 'error ', 'failed', 'failure', 'exception',
               'command not found', 'not found', 'permission denied',

@@ -156,7 +156,8 @@ const AIAssistant = forwardRef(({
   explorerRefreshTrigger,
   onFirstResponse,
   visible,
-  devServerUrl
+  devServerUrl,
+  terminalOutput
 }, ref) => {
   // Load messages from localStorage if available, but reset if workspaceFolder changes
   const defaultWelcome = {
@@ -245,11 +246,17 @@ const AIAssistant = forwardRef(({
   const lastSubmittedMessageRef = useRef(null); // Track last submitted message to prevent StrictMode duplicates
   const [retryContext, setRetryContext] = useState(null); // Store context for retry functionality
   const workspaceFolderRef = useRef(workspaceFolder);
+  const terminalOutputRef = useRef(''); // Track terminal output for PTY-based error detection
 
   // Keep ref in sync with state
   useEffect(() => {
     workspaceFolderRef.current = workspaceFolder;
   }, [workspaceFolder]);
+
+  // Keep terminal output ref in sync with prop
+  useEffect(() => {
+    terminalOutputRef.current = terminalOutput || '';
+  }, [terminalOutput]);
 
   // Effect to notify when dev server is detected from logs
   useEffect(() => {
@@ -1423,6 +1430,21 @@ Could you provide more details about what you'd like to build?`;
     const commands = extractCommands(messageContent);
     if (commands.length === 0) return;
 
+    // Wait if terminal is already busy (prevents command collision)
+    if (isTerminalBusy) {
+      console.log('⏳ Terminal busy, waiting...');
+      // Wait up to 30 seconds for terminal to be free
+      let waitTime = 0;
+      while (isTerminalBusy && waitTime < 30000) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        waitTime += 500;
+      }
+      if (isTerminalBusy) {
+        console.warn('Terminal still busy after 30s, aborting command execution');
+        return;
+      }
+    }
+
     setIsTerminalBusy(true);
     try {
       // Get the first available terminal ID from the app
@@ -1478,17 +1500,99 @@ Could you provide more details about what you'd like to build?`;
         ]);
 
         try {
+          // Capture terminal output BEFORE command (PTY-only approach)
+          const outputBeforeCommand = terminalOutputRef.current || '';
+          const outputLengthBefore = outputBeforeCommand.length;
+          
           // Write the command to the terminal
           await window.electronAPI.terminalWrite(targetTerminalBackendId, command + '\r');
 
-          let result = { success: true, stdout: '', stderr: '' };
-
-          // Background execution for commands that return (not servers)
-          if (!isRunCommand) {
-            result = await window.electronAPI.terminalExecute(command, workspaceFolderRef.current);
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+          // Real-time tracking: poll until we detect command completion
+          const maxWaitTime = 1200000; // 20 min absolute max (safety net)
+          const checkInterval = 300; // Check every 300ms
+          const stableThreshold = 1500; // Output must be stable for 1.5s
+          
+          // Completion patterns for different command types
+          const completionPatterns = [
+            // npm
+            /added \d+ packages?/i,
+            /up to date/i,
+            /npm warn/i,  // warnings mean it finished
+            /npm err!/i,  // errors mean it finished (with error)
+            // yarn
+            /done in \d+/i,
+            /success /i,
+            // pnpm
+            /packages are ready/i,
+            // General
+            /\$ $/, // Back to prompt
+            /completed/i,
+            /finished/i,
+            /built /i,
+            /compiled/i,
+            /error:/i,
+            /failed/i,
+            /command not found/i,
+          ];
+          
+          let lastOutputLength = outputLengthBefore;
+          let stableTime = 0;
+          let totalWaitTime = 0;
+          
+          while (totalWaitTime < maxWaitTime) {
+            await new Promise(resolve => setTimeout(resolve, checkInterval));
+            totalWaitTime += checkInterval;
+            
+            const currentOutput = terminalOutputRef.current || '';
+            const currentLength = currentOutput.length;
+            const newOutput = currentOutput.slice(outputLengthBefore);
+            
+            // Check for completion patterns in the new output
+            const foundCompletion = completionPatterns.some(pattern => pattern.test(newOutput));
+            if (foundCompletion && !isRunCommand) {
+              // Wait a tiny bit more to capture any trailing output
+              await new Promise(resolve => setTimeout(resolve, 500));
+              debug(`✅ Command completed (pattern matched) after ${totalWaitTime}ms`);
+              break;
+            }
+            
+            if (currentLength === lastOutputLength) {
+              stableTime += checkInterval;
+              if (stableTime >= stableThreshold) {
+                debug(`✅ Command finished after ${totalWaitTime}ms (output stable)`);
+                break;
+              }
+            } else {
+              stableTime = 0;
+              lastOutputLength = currentLength;
+            }
+            
+            // For run commands (servers), exit after detecting URL or 5s
+            if (isRunCommand) {
+              const urlMatch = newOutput.match(/https?:\/\/localhost:\d+|http:\/\/127\.0\.0\.1:\d+/);
+              if (urlMatch || totalWaitTime >= 5000) {
+                debug('🚀 Run command - server detected or timeout');
+                break;
+              }
+            }
           }
+          
+          if (totalWaitTime >= maxWaitTime) {
+            debug(`⏱️ Command timed out after ${maxWaitTime}ms`);
+          }
+
+          // Capture output AFTER command from PTY
+          const outputAfterCommand = terminalOutputRef.current || '';
+          const commandOutput = outputAfterCommand.slice(outputLengthBefore).trim();
+          
+          debug('📟 PTY Output captured:', commandOutput.substring(0, 500));
+
+          // Build result from PTY output (no separate terminalExecute)
+          let result = { 
+            success: true, 
+            stdout: commandOutput, 
+            stderr: '' 
+          };
 
           // Update status to completed
           setMessages(prev => prev.map(msg =>
@@ -1498,17 +1602,19 @@ Could you provide more details about what you'd like to build?`;
           ));
 
           const executionTime = Date.now() - commandId;
-          const errorText = (result.stderr || '') + ' ' + (result.error || '') + ' ' + (result.stdout || '');
-          const hasError = !result.success ||
-            (errorText && (
-              errorText.toLowerCase().includes('error') ||
-              errorText.toLowerCase().includes('failed') ||
-              errorText.toLowerCase().includes('cannot find') ||
-              errorText.toLowerCase().includes('not found') ||
-              errorText.toLowerCase().includes('command not found') ||
-              errorText.toLowerCase().includes('enoent') ||
-              errorText.toLowerCase().includes('no such file')
-            ));
+          const errorText = commandOutput.toLowerCase();
+          const hasError = 
+            errorText.includes('error') ||
+            errorText.includes('failed') ||
+            errorText.includes('cannot find') ||
+            errorText.includes('not found') ||
+            errorText.includes('command not found') ||
+            errorText.includes('npm err!') ||
+            errorText.includes('enoent') ||
+            errorText.includes('no such file') ||
+            errorText.includes('permission denied') ||
+            errorText.includes('fatal:') ||
+            errorText.includes('exception');
 
           AnalyticsService.trackCommand(command, !hasError, executionTime);
 
@@ -1518,7 +1624,7 @@ Could you provide more details about what you'd like to build?`;
           }
 
           // Auto-detection of dev server URL
-          if (!hasError && (isRunCommand || result.stdout)) {
+          if (!hasError && (isRunCommand || commandOutput)) {
             const urlPatterns = [
               /(?:Local|➜\s+Local|Network|➜\s+Network):\s+(https?:\/\/[^\s]+)/i,
               /(?:running on|listening on|server running at|Application started at):\s+(https?:\/\/[^\s]+)/i,
@@ -1528,7 +1634,7 @@ Could you provide more details about what you'd like to build?`;
             ];
 
             let detectedUrl = null;
-            const output = result.stdout + (result.stderr || '');
+            const output = commandOutput;
 
             for (const pattern of urlPatterns) {
               const match = output.match(pattern);
@@ -1567,15 +1673,38 @@ Could you provide more details about what you'd like to build?`;
           // Auto-fix logic if command failed
           if (hasError) {
             debug('❌ Command failed, attempting auto-fix...');
+            debug('📋 Error output from PTY:', commandOutput.substring(0, 1000));
             
-            const errorOutput = result.error || result.stderr || result.stdout || 'Command failed with unknown error';
+            const errorOutput = commandOutput || 'Command failed with unknown error';
             
-            // Build context for auto-fix
+            // Build better context for auto-fix
             const errorContext = [
-              ...conversationHistory.current.slice(-4), // Last 4 messages for context
+              ...conversationHistory.current.slice(-6), // Last 6 messages for more context
               {
                 role: 'user',
-                content: `The following command failed:\n\n\`\`\`bash\n${command}\n\`\`\`\n\nError output:\n\`\`\`\n${errorOutput}\n\`\`\`\n\nPlease analyze this error and provide a fix. Remember to use the filename= format for any code files.`
+                content: `🚨 **COMMAND FAILED - AUTO-FIX NEEDED**
+
+**Failed Command:**
+\`\`\`bash
+${command}
+\`\`\`
+
+**Working Directory:** ${workspaceFolderRef.current || 'Unknown'}
+
+**Error Output (from terminal):**
+\`\`\`
+${errorOutput}
+\`\`\`
+
+**Instructions:**
+1. Analyze the error carefully
+2. Identify the root cause (missing dependency, wrong path, syntax error, etc.)
+3. Provide a SPECIFIC fix - not generic advice
+4. If it's a missing package, provide the exact install command
+5. If it's a code error, provide the corrected code with filename= format
+6. If multiple steps are needed, provide them in order
+
+Remember: Use filename= format for any code files you create or modify.`
               }
             ];
             
@@ -1613,7 +1742,8 @@ Could you provide more details about what you'd like to build?`;
                 conversationHistory.current.push(fixMessage);
                 
                 // Process the fix (create files and run commands)
-                setTimeout(async () => {
+                // Wait for current command batch to finish before running fix commands
+                const runFix = async () => {
                   try {
                     const fixCommands = extractCommands(fixResponse.message);
                     const fixCodeBlocks = extractCodeBlocks(fixResponse.message);
@@ -1622,13 +1752,24 @@ Could you provide more details about what you'd like to build?`;
                       await handleCreateFilesAutomatically(fixResponse.message, fixMessage.id);
                     }
                     
-                    if (fixCommands.length > 0) {
+                    // Only run fix commands if terminal is not busy
+                    if (fixCommands.length > 0 && !isTerminalBusy) {
                       await executeCommandsAutomatically(fixResponse.message);
+                    } else if (fixCommands.length > 0) {
+                      // Queue message to show user the commands to run
+                      setMessages(prev => [...prev, {
+                        id: Date.now(),
+                        role: 'system',
+                        content: `⏸️ **Commands queued** - Terminal is busy. Run these commands when ready:\n\n${fixCommands.map(c => '```bash\n' + c + '\n```').join('\n')}`
+                      }]);
                     }
                   } catch (err) {
                     console.error('Error processing auto-fix:', err);
                   }
-                }, 500);
+                };
+                
+                // Wait a bit longer to ensure command batch completes
+                setTimeout(runFix, 2000);
               }
             } catch (fixError) {
               console.error('Auto-fix failed:', fixError);
