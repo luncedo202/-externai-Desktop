@@ -95,7 +95,7 @@
         ],
         "mac": {
             "category": "public.app-category.developer-tools",
-            "icon": "assets/externai-logo.png",
+            "icon": "assets/icon.icns",
             "target": [
                 {
                     "target": "dmg",
@@ -118,7 +118,7 @@
             "entitlementsInherit": "assets/entitlements.mac.plist"
         },
         "win": {
-            "icon": "assets/externai-logo.png",
+            "icon": "assets/icon.ico",
             "target": [
                 {
                     "target": "nsis",
