@@ -249,7 +249,7 @@ function ImageSearch() {
             <p>Search for images</p>
             <span>Type a keyword and press Enter</span>
             <div className="drag-hint">
-              <p>💡 Tip: Drag images to the chat to share them with AI</p>
+              <p>Tip: Drag images to the chat to share them with AI</p>
             </div>
           </div>
         )}

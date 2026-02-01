@@ -109,25 +109,48 @@ function Panel({
       terminalInstances.current[terminalId] = term;
       fitAddons.current[terminalId] = fitAddon;
 
+      // Show connecting message
+      term.writeln('Connecting to terminal...');
+      term.writeln('');
+
       // Create terminal backend
       const result = await window.electronAPI.terminal.create(workspaceFolder);
 
       if (!result.success) {
-        // Show error message in terminal
+        // Clear connecting message and show error
+        term.clear();
         term.writeln('\x1b[1;31mTerminal Error:\x1b[0m ' + result.error);
-        term.writeln('\x1b[33mPlease run:\x1b[0m npm rebuild node-pty');
         term.writeln('');
-        term.writeln('The app will work without terminal, but you won\'t be able to run commands.');
+        term.writeln('\x1b[33mThe app will work without terminal, but you won\'t be able to run commands.\x1b[0m');
+        term.writeln('');
+        term.writeln('\x1b[36mTo fix: Restart the app. If the problem persists, reinstall the app.\x1b[0m');
         return;
       }
 
       if (result.success) {
-        // Store the backend terminal ID
+        // Clear connecting message
+        term.clear();
+        
+        // Show fallback mode notice if using child_process
+        if (result.fallback) {
+          term.writeln('\x1b[33m⚠ Using basic terminal mode (some features may be limited)\x1b[0m');
+          term.writeln('\x1b[90mTip: Use CTRL+C to stop running processes\x1b[0m');
+          term.writeln('');
+        }
+        
+        // Store the backend terminal ID and fallback status
         backendTerminalIds.current[terminalId] = result.terminalId;
+        const isFallback = result.fallback;
 
         // Handle terminal input
         term.onData((data) => {
-          window.electronAPI.terminal.write(result.terminalId, data);
+          // For fallback terminal, handle CTRL+C specially
+          if (isFallback && data === '\x03') {
+            // Send SIGINT signal for CTRL+C in fallback mode
+            window.electronAPI.terminal.signal(result.terminalId, 'SIGINT');
+          } else {
+            window.electronAPI.terminal.write(result.terminalId, data);
+          }
         });
 
         // Handle terminal data from backend

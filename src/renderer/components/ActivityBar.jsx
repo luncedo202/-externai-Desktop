@@ -7,11 +7,12 @@ import {
   FiPackage, 
   FiSettings,
   FiMessageSquare,
-  FiImage
+  FiImage,
+  FiGlobe
 } from 'react-icons/fi';
 import './ActivityBar.css';
 
-function ActivityBar({ activeView, onViewChange, onAIToggle }) {
+function ActivityBar({ activeView, onViewChange, onAIToggle, onShowPublishedApps }) {
   const buttons = [
     { id: 'explorer', icon: FiFile, tooltip: 'Explorer' },
     { id: 'search', icon: FiSearch, tooltip: 'Search' },
@@ -36,6 +37,13 @@ function ActivityBar({ activeView, onViewChange, onAIToggle }) {
         ))}
       </div>
       <div className="activity-buttons-bottom">
+        <button
+          className="activity-button"
+          onClick={onShowPublishedApps}
+          title="My Published Apps"
+        >
+          <FiGlobe size={24} />
+        </button>
         <button
           className="activity-button ai-button"
           onClick={onAIToggle}

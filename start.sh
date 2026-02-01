@@ -5,7 +5,12 @@
 # Kill any existing processes on the ports we'll use
 lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 
-echo "Starting Eletr0 Studio..."
+echo "Starting ExternAI..."
+echo "Checking terminal support..."
+
+# Rebuild node-pty for Electron (silently)
+npx @electron/rebuild -f -m node_modules/node-pty > /dev/null 2>&1 || echo "Note: Terminal may require restart"
+
 echo "Building renderer process..."
 
 # Start Vite in the background

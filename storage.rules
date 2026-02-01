@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Published apps storage
+    match /published_apps/{appId}/{allPaths=**} {
+      // Anyone can read published app files
+      allow read: if true;
+      
+      // Only Cloud Functions can write (handled via Admin SDK)
+      allow write: if false;
+    }
+    
+    // Default deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

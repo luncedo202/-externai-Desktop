@@ -11,5 +11,22 @@
                 "*.local"
             ]
         }
-    ]
+    ],
+    "hosting": {
+        "public": "public",
+        "ignore": [
+            "firebase.json",
+            "**/.*",
+            "**/node_modules/**"
+        ],
+        "rewrites": [
+            {
+                "source": "/app/**",
+                "function": "serveApp"
+            }
+        ]
+    },
+    "storage": {
+        "rules": "storage.rules"
+    }
 }

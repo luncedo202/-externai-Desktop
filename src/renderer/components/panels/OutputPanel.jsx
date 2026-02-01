@@ -65,14 +65,14 @@ function OutputPanel({ outputLogs = [] }) {
             onClick={() => setAutoScroll(!autoScroll)}
             title="Toggle Auto Scroll"
           >
-            ⬇
+            Scroll
           </button>
           <button 
             className="icon-button"
             onClick={handleClear}
             title="Clear Output"
           >
-            🗑
+            Clear
           </button>
         </div>
       </div>

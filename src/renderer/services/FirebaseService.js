@@ -173,6 +173,9 @@ const getErrorMessage = (errorCode) => {
   }
 };
 
+// Get Firebase app instance (for use with other Firebase services)
+export const getApp = () => app;
+
 export default {
   signUp,
   signIn,
@@ -180,5 +183,6 @@ export default {
   getIdToken,
   onAuthChange,
   getCurrentUser,
+  getApp,
   db
 };

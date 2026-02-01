@@ -3,19 +3,120 @@ const { autoUpdater } = require('electron-updater');
 require('./ClaudeProxy');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const chokidar = require('chokidar');
 const Store = require('electron-store');
-const { execSync } = require('child_process');
+const { execSync, exec } = require('child_process');
+const os = require('os');
 
-// Check if Node.js is installed
+// Get bundled Node.js paths
+function getBundledNodePaths() {
+  const platform = `${process.platform}-${process.arch}`;
+  const isPackaged = app.isPackaged;
+  
+  let bundledDir;
+  if (isPackaged) {
+    // In packaged app, bundled-node is in resources
+    bundledDir = path.join(process.resourcesPath, 'bundled-node', platform);
+  } else {
+    // In development, it's in project root
+    bundledDir = path.join(__dirname, '../../bundled-node', platform);
+  }
+  
+  const isWindows = process.platform === 'win32';
+  const nodeBin = path.join(bundledDir, isWindows ? 'node.exe' : 'bin/node');
+  const npmBin = path.join(bundledDir, isWindows ? 'npm.cmd' : 'bin/npm');
+  const npxBin = path.join(bundledDir, isWindows ? 'npx.cmd' : 'bin/npx');
+  const binDir = path.join(bundledDir, isWindows ? '' : 'bin');
+  
+  return { bundledDir, nodeBin, npmBin, npxBin, binDir, isWindows };
+}
+
+// Check if bundled Node.js exists
+function hasBundledNode() {
+  const { nodeBin } = getBundledNodePaths();
+  return fsSync.existsSync(nodeBin);
+}
+
+// Check if Node.js is available (bundled or system)
 function checkNodeInstalled() {
+  const bundled = getBundledNodePaths();
+  
+  // First check bundled Node.js
+  if (fsSync.existsSync(bundled.nodeBin)) {
+    try {
+      const nodeVersion = execSync(`"${bundled.nodeBin}" --version`, { encoding: 'utf8', timeout: 5000 }).trim();
+      const npmVersion = execSync(`"${bundled.npmBin}" --version`, { encoding: 'utf8', timeout: 5000 }).trim();
+      console.log(`✅ Using bundled Node.js: ${nodeVersion}`);
+      return { installed: true, nodeVersion, npmVersion, bundled: true };
+    } catch (error) {
+      console.warn('⚠️ Bundled Node.js found but failed to execute:', error.message);
+    }
+  }
+  
+  // Fall back to system Node.js
   try {
     const nodeVersion = execSync('node --version', { encoding: 'utf8', timeout: 5000 }).trim();
     const npmVersion = execSync('npm --version', { encoding: 'utf8', timeout: 5000 }).trim();
-    return { installed: true, nodeVersion, npmVersion };
+    console.log(`[OK] Using system Node.js: ${nodeVersion}`);
+    return { installed: true, nodeVersion, npmVersion, bundled: false };
   } catch (error) {
-    return { installed: false, nodeVersion: null, npmVersion: null };
+    return { installed: false, nodeVersion: null, npmVersion: null, bundled: false };
   }
+}
+
+// Get enhanced PATH with bundled Node.js
+function getEnhancedPath() {
+  const bundled = getBundledNodePaths();
+  const homedir = os.homedir();
+  const pathSeparator = bundled.isWindows ? ';' : ':';
+  
+  let extraPaths = [];
+  
+  // Add bundled Node.js first (highest priority)
+  if (fsSync.existsSync(bundled.nodeBin)) {
+    extraPaths.push(bundled.binDir);
+  }
+  
+  // Add common Node.js locations as fallback
+  if (bundled.isWindows) {
+    extraPaths.push(
+      'C:\\Program Files\\nodejs',
+      'C:\\Program Files (x86)\\nodejs',
+      `${homedir}\\AppData\\Roaming\\npm`
+    );
+  } else {
+    extraPaths.push(
+      '/usr/local/bin',
+      '/opt/homebrew/bin',
+      '/opt/homebrew/sbin',
+      `${homedir}/.npm-global/bin`,
+      '/usr/local/opt/node/bin'
+    );
+  }
+  
+  return `${extraPaths.join(pathSeparator)}${pathSeparator}${process.env.PATH || ''}`;
+}
+
+// Attempt to rebuild node-pty automatically
+async function rebuildNodePty() {
+  return new Promise((resolve) => {
+    console.log('[INFO] Attempting to rebuild node-pty automatically...');
+    // Use @electron/rebuild for proper Electron compatibility
+    const rebuildCmd = process.platform === 'win32' 
+      ? 'npx.cmd @electron/rebuild -f -m node_modules/node-pty' 
+      : 'npx @electron/rebuild -f -m node_modules/node-pty';
+    
+    exec(rebuildCmd, { cwd: path.join(__dirname, '../..') }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('❌ Auto-rebuild failed:', error.message);
+        resolve(false);
+      } else {
+        console.log('✅ node-pty rebuilt successfully');
+        resolve(true);
+      }
+    });
+  });
 }
 
 // Secure storage for auth tokens
@@ -26,14 +127,90 @@ const store = new Store({
 
 // Load node-pty for terminal support
 let pty;
-try {
-  pty = require('node-pty');
-  console.log('✅ Terminal support enabled');
-} catch (error) {
-  console.error('❌ node-pty load error:', error.message);
-  console.warn('Terminal features will be disabled.');
-  console.warn('Run: npx @electron/rebuild');
-  pty = null;
+let ptyLoadAttempted = false;
+let useFallbackTerminal = false; // Flag to use child_process fallback
+
+function loadPty() {
+  try {
+    // Clear require cache to force reload
+    delete require.cache[require.resolve('node-pty')];
+    pty = require('node-pty');
+    console.log('[OK] Terminal support enabled (node-pty)');
+    return true;
+  } catch (error) {
+    console.error('[ERROR] node-pty load error:', error.message);
+    pty = null;
+    return false;
+  }
+}
+
+// Fallback terminal using child_process (works without native modules)
+const { spawn } = require('child_process');
+let fallbackTerminals = new Map();
+let fallbackProcessGroups = new Map(); // Track process groups for signal handling
+
+function createFallbackTerminal(cwd) {
+  const isWindows = process.platform === 'win32';
+  const shell = process.env.SHELL || (isWindows ? 'cmd.exe' : '/bin/zsh');
+  
+  // Use login shell on Unix for proper PATH setup
+  const shellArgs = isWindows ? [] : ['-l', '-i']; // Login + Interactive mode
+  
+  const enhancedEnv = {
+    ...process.env,
+    PATH: getEnhancedPath(),
+    TERM: 'dumb', // Use 'dumb' terminal to avoid escape sequences that won't work
+    // Disable shell features that require PTY
+    BASH_SILENCE_DEPRECATION_WARNING: '1',
+    NO_COLOR: '1', // Some tools respect this for simpler output
+  };
+  
+  const proc = spawn(shell, shellArgs, {
+    cwd: cwd || process.env.HOME || process.cwd(),
+    env: enhancedEnv,
+    shell: false,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    detached: !isWindows, // Create process group on Unix for better signal handling
+  });
+  
+  return proc;
+}
+
+// Handle CTRL+C in fallback terminal
+function sendSignalToFallback(terminalId, signal) {
+  const proc = fallbackTerminals.get(terminalId);
+  if (proc) {
+    try {
+      // On Unix, send signal to process group
+      if (process.platform !== 'win32' && proc.pid) {
+        process.kill(-proc.pid, signal);
+      } else {
+        proc.kill(signal);
+      }
+      return true;
+    } catch (error) {
+      console.error('[Terminal] Signal error:', error.message);
+      return false;
+    }
+  }
+  return false;
+}
+
+// Initial load attempt
+if (!loadPty() && !ptyLoadAttempted) {
+  ptyLoadAttempted = true;
+  useFallbackTerminal = true;
+  console.log('⏳ node-pty not available, using fallback terminal (child_process)');
+}
+
+// Log bundled Node.js status on startup
+const nodeStatus = checkNodeInstalled();
+if (nodeStatus.bundled) {
+  console.log('[INFO] ExternAI is using bundled Node.js - no external installation required');
+} else if (nodeStatus.installed) {
+  console.log('[INFO] ExternAI is using system Node.js');
+} else {
+  console.log('[WARNING] No Node.js found - some features will be limited');
 }
 
 let mainWindow;
@@ -54,6 +231,7 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      webviewTag: true,
     },
     icon: path.join(__dirname, '../../assets/icon.png'),
     titleBarStyle: 'hiddenInset',
@@ -68,10 +246,10 @@ async function createWindow() {
         ...details.responseHeaders,
         'Content-Security-Policy': isDev ? [
           // Development: Allow Vite HMR, Monaco CDN, Firebase Auth, Railway backend, Google Analytics
-          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* https://cdn.jsdelivr.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:* https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://*.up.railway.app https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://api-bkrpnxig4a-uc.a.run.app; worker-src 'self' blob: https://cdn.jsdelivr.net;"
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* https://cdn.jsdelivr.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:* https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://*.up.railway.app https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://api-bkrpnxig4a-uc.a.run.app; worker-src 'self' blob: https://cdn.jsdelivr.net; frame-src 'self' http://localhost:* https:;"
         ] : [
           // Production: Strict CSP, allow Monaco CDN, Firebase Auth, Railway backend, Google Analytics
-          "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://*.up.railway.app https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://api-bkrpnxig4a-uc.a.run.app; worker-src 'self' blob: https://cdn.jsdelivr.net;"
+          "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://*.up.railway.app https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://api-bkrpnxig4a-uc.a.run.app; worker-src 'self' blob: https://cdn.jsdelivr.net; frame-src 'self' http://localhost:* https:;"
         ]
       }
     });
@@ -95,7 +273,7 @@ async function createWindow() {
     }
     
     if (!loaded) {
-      console.error('❌ Could not connect to dev server on any port');
+      console.error('[ERROR] Could not connect to dev server on any port');
     }
     
     mainWindow.webContents.openDevTools();
@@ -342,61 +520,91 @@ ipcMain.handle('dialog:saveFile', async (event, defaultPath) => {
 });
 
 // Terminal Operations
-ipcMain.handle('terminal:create', (event, cwd) => {
-  if (!pty) {
-    return { 
-      success: false, 
-      error: 'Terminal not available. Run: npm rebuild node-pty' 
-    };
+ipcMain.handle('terminal:create', async (event, cwd) => {
+  // Try node-pty first, then fallback to child_process
+  if (!pty && !useFallbackTerminal) {
+    console.log('[INFO] Terminal not available, attempting auto-fix...');
+    const rebuilt = await rebuildNodePty();
+    if (rebuilt) {
+      // Try to load pty again after rebuild
+      if (!loadPty()) {
+        console.log('[INFO] node-pty rebuild failed, switching to fallback terminal');
+        useFallbackTerminal = true;
+      }
+    } else {
+      console.log('[INFO] node-pty not available, using fallback terminal');
+      useFallbackTerminal = true;
+    }
   }
   
+  const terminalId = Date.now().toString();
+  
+  // Use fallback terminal (child_process) if node-pty is not available
+  if (useFallbackTerminal || !pty) {
+    try {
+      console.log('[Terminal] Using fallback terminal (child_process) in', cwd || process.env.HOME);
+      
+      const proc = createFallbackTerminal(cwd);
+      fallbackTerminals.set(terminalId, proc);
+      terminalBuffers.set(terminalId, []);
+      
+      // Handle stdout
+      proc.stdout.on('data', (data) => {
+        const text = data.toString();
+        const buffer = terminalBuffers.get(terminalId) || [];
+        buffer.push(text);
+        if (buffer.length > 1000) buffer.shift();
+        terminalBuffers.set(terminalId, buffer);
+        mainWindow.webContents.send('terminal:data', terminalId, text);
+      });
+      
+      // Handle stderr
+      proc.stderr.on('data', (data) => {
+        const text = data.toString();
+        const buffer = terminalBuffers.get(terminalId) || [];
+        buffer.push(text);
+        if (buffer.length > 1000) buffer.shift();
+        terminalBuffers.set(terminalId, buffer);
+        mainWindow.webContents.send('terminal:data', terminalId, text);
+      });
+      
+      // Handle exit
+      proc.on('close', (code) => {
+        fallbackTerminals.delete(terminalId);
+        terminalBuffers.delete(terminalId);
+        mainWindow.webContents.send('terminal:exit', terminalId);
+      });
+      
+      proc.on('error', (error) => {
+        console.error('[Terminal] Fallback terminal error:', error);
+        mainWindow.webContents.send('terminal:data', terminalId, `\r\n\x1b[31mTerminal error: ${error.message}\x1b[0m\r\n`);
+      });
+      
+      return { success: true, terminalId, fallback: true };
+    } catch (error) {
+      console.error('[Terminal] Fallback terminal creation failed:', error);
+      return {
+        success: false,
+        error: 'Terminal could not be started. Error: ' + error.message
+      };
+    }
+  }
+  
+  // Use node-pty (full PTY support)
   try {
     // Use the user's default shell or fallback to zsh/bash
     const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
     console.log('[Terminal] Attempting to spawn:', shell, 'in', cwd || process.env.HOME);
     
-    // Build enhanced PATH that includes common Node.js installation locations
-    const homedir = require('os').homedir();
-    const isWindows = process.platform === 'win32';
-    const pathSeparator = isWindows ? ';' : ':';
-    
-    let extraPaths;
-    if (isWindows) {
-      // Windows paths
-      extraPaths = [
-        'C:\\Program Files\\nodejs',
-        'C:\\Program Files (x86)\\nodejs',
-        `${homedir}\\AppData\\Roaming\\npm`,
-        `${homedir}\\AppData\\Local\\Yarn\\bin`,
-        `${homedir}\\AppData\\Local\\pnpm`,
-        `${homedir}\\.nvm\\versions\\node`,
-        'C:\\ProgramData\\nvm',
-      ].join(pathSeparator);
-    } else {
-      // macOS/Linux paths
-      extraPaths = [
-        '/usr/local/bin',
-        '/opt/homebrew/bin',
-        '/opt/homebrew/sbin',
-        `${homedir}/.nvm/versions/node/*/bin`,
-        `${homedir}/.npm-global/bin`,
-        `${homedir}/.yarn/bin`,
-        `${homedir}/.local/bin`,
-        '/usr/local/opt/node/bin',
-        '/usr/local/opt/node@18/bin',
-        '/usr/local/opt/node@20/bin',
-        '/usr/local/opt/node@22/bin',
-      ].join(pathSeparator);
-    }
-    
-    // Merge with existing PATH
+    // Use enhanced PATH that includes bundled Node.js
     const enhancedEnv = {
       ...process.env,
-      PATH: `${extraPaths}${pathSeparator}${process.env.PATH || ''}`,
+      PATH: getEnhancedPath(),
     };
     
     // Spawn as LOGIN SHELL (-l flag) so it loads ~/.zshrc, ~/.bash_profile, etc.
     // This makes it behave like Terminal.app
+    const isWindows = process.platform === 'win32';
     const shellArgs = isWindows ? [] : ['-l'];
     
     const ptyProcess = pty.spawn(shell, shellArgs, {
@@ -407,7 +615,6 @@ ipcMain.handle('terminal:create', (event, cwd) => {
       env: enhancedEnv,
     });
 
-    const terminalId = Date.now().toString();
     terminals.set(terminalId, ptyProcess);
     terminalBuffers.set(terminalId, []); // Initialize output buffer
 
@@ -432,39 +639,90 @@ ipcMain.handle('terminal:create', (event, cwd) => {
     return { success: true, terminalId };
   } catch (error) {
     console.error('[Terminal] Error creating terminal:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to create terminal'
-    };
+    // Try fallback if node-pty fails at runtime
+    console.log('[Terminal] Falling back to child_process terminal');
+    useFallbackTerminal = true;
+    return ipcMain.emit('terminal:create', event, cwd);
   }
 });
 
 ipcMain.handle('terminal:write', (event, terminalId, data) => {
+  // Check node-pty terminals first
   const terminal = terminals.get(terminalId);
   if (terminal) {
     terminal.write(data);
     return { success: true };
   }
+  
+  // Check fallback terminals
+  const fallbackTerminal = fallbackTerminals.get(terminalId);
+  if (fallbackTerminal && fallbackTerminal.stdin) {
+    fallbackTerminal.stdin.write(data);
+    return { success: true };
+  }
+  
   return { success: false, error: 'Terminal not found' };
 });
 
 ipcMain.handle('terminal:resize', (event, terminalId, cols, rows) => {
   const terminal = terminals.get(terminalId);
-  if (terminal) {
+  if (terminal && terminal.resize) {
     terminal.resize(cols, rows);
+    return { success: true };
+  }
+  // Fallback terminals don't support resize, but return success anyway
+  if (fallbackTerminals.has(terminalId)) {
     return { success: true };
   }
   return { success: false, error: 'Terminal not found' };
 });
 
 ipcMain.handle('terminal:kill', (event, terminalId) => {
+  // Check node-pty terminals first
   const terminal = terminals.get(terminalId);
   if (terminal) {
     terminal.kill();
     terminals.delete(terminalId);
-    terminalBuffers.delete(terminalId); // Clean up buffer
+    terminalBuffers.delete(terminalId);
     return { success: true };
   }
+  
+  // Check fallback terminals
+  const fallbackTerminal = fallbackTerminals.get(terminalId);
+  if (fallbackTerminal) {
+    // On Unix, kill the process group
+    if (process.platform !== 'win32' && fallbackTerminal.pid) {
+      try {
+        process.kill(-fallbackTerminal.pid, 'SIGTERM');
+      } catch (e) {
+        fallbackTerminal.kill();
+      }
+    } else {
+      fallbackTerminal.kill();
+    }
+    fallbackTerminals.delete(terminalId);
+    terminalBuffers.delete(terminalId);
+    return { success: true };
+  }
+  
+  return { success: false, error: 'Terminal not found' };
+});
+
+// Send signal to terminal (for CTRL+C support in fallback)
+ipcMain.handle('terminal:signal', (event, terminalId, signal = 'SIGINT') => {
+  // Node-pty handles signals automatically, but fallback needs manual handling
+  const fallbackTerminal = fallbackTerminals.get(terminalId);
+  if (fallbackTerminal) {
+    return { success: sendSignalToFallback(terminalId, signal) };
+  }
+  
+  // For node-pty, write CTRL+C character
+  const terminal = terminals.get(terminalId);
+  if (terminal) {
+    terminal.write('\x03'); // CTRL+C
+    return { success: true };
+  }
+  
   return { success: false, error: 'Terminal not found' };
 });
 
@@ -1177,11 +1435,11 @@ autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
 autoUpdater.on('checking-for-update', () => {
-  console.log('🔍 Checking for updates...');
+  console.log('[INFO] Checking for updates...');
 });
 
 autoUpdater.on('update-available', (info) => {
-  console.log('✅ Update available:', info.version);
+  console.log('[OK] Update available:', info.version);
   dialog.showMessageBox(mainWindow, {
     type: 'info',
     title: 'Update Available',
@@ -1197,16 +1455,16 @@ autoUpdater.on('update-available', (info) => {
 });
 
 autoUpdater.on('update-not-available', () => {
-  console.log('✅ App is up to date');
+  console.log('[OK] App is up to date');
 });
 
 autoUpdater.on('download-progress', (progress) => {
-  console.log(`📥 Download progress: ${Math.round(progress.percent)}%`);
+  console.log(`[INFO] Download progress: ${Math.round(progress.percent)}%`);
   mainWindow.webContents.send('update-progress', progress);
 });
 
 autoUpdater.on('update-downloaded', () => {
-  console.log('✅ Update downloaded');
+  console.log('[OK] Update downloaded');
   dialog.showMessageBox(mainWindow, {
     type: 'info',
     title: 'Update Ready',
@@ -1221,7 +1479,7 @@ autoUpdater.on('update-downloaded', () => {
 });
 
 autoUpdater.on('error', (error) => {
-  console.error('❌ Auto-updater error:', error);
+  console.error('[ERROR] Auto-updater error:', error);
 });
 
 // ==================== Authentication IPC Handlers ====================

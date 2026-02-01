@@ -116,7 +116,7 @@ function DebugConsole({ debugLogs = [] }) {
             onClick={handleClear}
             title="Clear Console"
           >
-            🗑
+            Clear
           </button>
         </div>
       </div>

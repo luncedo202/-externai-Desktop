@@ -93,7 +93,7 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
   // Refresh when trigger changes (manual refresh fallback)
   useEffect(() => {
     if (workspaceFolder && refreshTrigger > 0) {
-      console.log('🔄 Explorer refresh triggered:', refreshTrigger);
+      console.log('[INFO] Explorer refresh triggered:', refreshTrigger);
       loadFolder(workspaceFolder);
     }
   }, [refreshTrigger, workspaceFolder]);
@@ -101,7 +101,7 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
   // Debug: Log when folderTree changes
   useEffect(() => {
     if (folderTree) {
-      console.log('🌳 FolderTree updated:', {
+      console.log('� FolderTree updated:', {
         path: folderTree.path,
         itemCount: folderTree.items?.length || 0,
         items: folderTree.items?.map(i => i.name) || []
@@ -126,12 +126,12 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
   // Unified refresh handler
   const handleRefresh = useCallback(() => {
     if (!workspaceFolder) return;
-    console.log('🔄 Explorer refreshing...');
+    console.log('[INFO] Explorer refreshing...');
     loadFolder(workspaceFolder);
 
     // Also trigger AI sync if available
     if (onRefresh) {
-      console.log('🤖 Triggering AI file sync...');
+      console.log('� Triggering AI file sync...');
       onRefresh();
     }
   }, [workspaceFolder, onRefresh]);
@@ -144,7 +144,7 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
   // Effect to reload when refresh trigger prop changes
   useEffect(() => {
     if (refreshTrigger > 0) {
-      console.log('🔄 Trigger prop changed:', refreshTrigger);
+      console.log('[INFO] Trigger prop changed:', refreshTrigger);
       handleRefresh();
     }
   }, [refreshTrigger, handleRefresh]);
@@ -158,14 +158,14 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
     const debouncedRefresh = () => {
       clearTimeout(refreshTimeout);
       refreshTimeout = setTimeout(() => {
-        console.log('🔄 Auto-refreshing explorer (watcher event)');
+        console.log('[INFO] Auto-refreshing explorer (watcher event)');
         handleRefresh();
       }, 500);
     };
 
     // Set up file watcher listeners
     const handleFileChange = (path) => {
-      console.log('📁 File system change:', path);
+      console.log('[INFO] File system change:', path);
       debouncedRefresh();
     };
 
@@ -197,11 +197,11 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
   }, [workspaceFolder, handleRefresh]);
 
   const loadFolder = async (path) => {
-    console.log('📂 Loading folder:', path);
+    console.log('[INFO] Loading folder:', path);
     const result = await window.electronAPI.fs.readDir(path);
     if (result.success) {
-      console.log('✅ Folder loaded, items:', result.items.length);
-      console.log('📄 Items:', result.items.map(i => i.name));
+      console.log('[OK] Folder loaded, items:', result.items.length);
+      console.log('[INFO] Items:', result.items.map(i => i.name));
       // Force new object reference to trigger re-render
       setFolderTree({
         path,
@@ -209,7 +209,7 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
       });
       setExpandedFolders(new Set([path]));
     } else {
-      console.error('❌ Failed to load folder:', result.error);
+      console.error('[ERROR] Failed to load folder:', result.error);
     }
   };
 

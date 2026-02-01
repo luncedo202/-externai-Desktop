@@ -1,22 +1,23 @@
-name: Build/Release
+name: Build & Release
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.35)'
+        required: false
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ${{ matrix.os }}
+  # Build for macOS Intel (x64)
+  build-macos-x64:
+    runs-on: macos-13
     
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-
     steps:
       - name: Check out git repository
         uses: actions/checkout@v4
@@ -32,30 +33,15 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Setup Visual Studio Build Tools (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: microsoft/setup-msbuild@v2
-
       - name: Install dependencies
         run: npm ci
-        env:
-          npm_config_build_from_source: true
 
-      - name: Clean ALL build artifacts
-        shell: bash
-        run: |
-          rm -rf build/ dist/ node_modules/.cache/
-          npm cache clean --force
-          
-      - name: Rebuild native modules
-        shell: bash
-        run: npm run postinstall || true
-        continue-on-error: true
+      - name: Download bundled Node.js for macOS x64
+        run: node scripts/download-node.js darwin-x64
 
-      - name: Clean build directory
-        shell: bash
-        run: rm -rf build/ dist/
-        
+      - name: Rebuild native modules for x64
+        run: npx @electron/rebuild
+
       - name: Build Renderer
         run: npm run build
         env:
@@ -66,33 +52,147 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
-      - name: Verify build output
-        shell: bash
-        run: |
-          echo "Checking build directory..."
-          ls -la build/ || echo "Build directory missing!"
-          
-      - name: Build Electron App (macOS)
-        if: matrix.os == 'macos-latest'
-        run: npx electron-builder --mac
+      - name: Build Electron App (macOS x64)
+        run: npx electron-builder --mac --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Upload macOS x64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-x64
+          path: |
+            dist/*.zip
+            dist/*.dmg
+            dist/*.blockmap
+            dist/latest-mac*.yml
+
+  # Build for macOS Apple Silicon (arm64)
+  build-macos-arm64:
+    runs-on: macos-14
+    
+    steps:
+      - name: Check out git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download bundled Node.js for macOS arm64
+        run: node scripts/download-node.js darwin-arm64
+
+      - name: Rebuild native modules for arm64
+        run: npx @electron/rebuild
+
+      - name: Build Renderer
+        run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
+      - name: Build Electron App (macOS arm64)
+        run: npx electron-builder --mac --arm64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS arm64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: |
+            dist/*.zip
+            dist/*.dmg
+            dist/*.blockmap
+            dist/latest-mac*.yml
+
+  # Build for Windows
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Check out git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download bundled Node.js for Windows
+        run: node scripts/download-node.js win32-x64
+
+      - name: Rebuild native modules for Windows
+        run: npx @electron/rebuild
+
+      - name: Build Renderer
+        run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
       - name: Build Electron App (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: bash
         run: npx electron-builder --win --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Release Assets
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest.yml
+
+  # Create Release with all artifacts
+  release:
+    needs: [build-macos-x64, build-macos-arm64, build-windows]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List all files
+        run: ls -la dist/
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            dist/*.zip
-            dist/*.exe
-            dist/*.dmg
-            dist/*.blockmap
-            dist/*.yml
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

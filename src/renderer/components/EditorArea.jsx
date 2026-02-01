@@ -23,7 +23,7 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
 
   // Debug logging for pendingPlan
   useEffect(() => {
-    console.log('📺 [EditorArea] pendingPlan changed:', pendingPlan);
+    console.log('[EditorArea] pendingPlan changed:', pendingPlan);
   }, [pendingPlan]);
 
   // Load editor settings from localStorage
@@ -71,14 +71,43 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
     });
   };
 
-  const handleCreateProject = async (projectType) => {
-    // Open folder dialog
+  const handleOpenFolder = async () => {
     const result = await window.electronAPI.dialog.openFolder();
     if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
       const folderPath = result.filePaths[0];
-      // Call onOpenFolder to set the workspace
       if (onOpenFolder) {
         onOpenFolder(folderPath);
+      }
+    }
+  };
+
+  const handleOpenFile = async () => {
+    const result = await window.electronAPI.dialog.openFile();
+    if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+      const filePath = result.filePaths[0];
+      if (onFileOpen) {
+        onFileOpen(filePath);
+      }
+    }
+  };
+
+  const handleQuickStart = async (template) => {
+    const result = await window.electronAPI.dialog.openFolder();
+    if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+      const folderPath = result.filePaths[0];
+      if (onOpenFolder) {
+        onOpenFolder(folderPath);
+      }
+      // Trigger AI with template-specific instructions
+      if (onQuickStart) {
+        const templates = {
+          'ecommerce': 'Build a full-stack e-commerce platform with product catalog, shopping cart, checkout process, user authentication, order management, payment integration (Stripe), admin dashboard, and responsive design. Use React for frontend, Node.js/Express for backend, and MongoDB for database.',
+          'saas-dashboard': 'Create a complete SaaS dashboard application with user authentication (JWT), subscription management, analytics charts, data tables, user settings, team collaboration features, API integration, and modern UI. Use React, TypeScript, Tailwind CSS, and include a backend with database.',
+          'social-media': 'Build a social media application with user profiles, post creation with image uploads, like/comment system, follow/unfollow functionality, feed algorithm, real-time notifications, direct messaging, and search. Include authentication, database design, and modern responsive UI.',
+          'streaming': 'Create a video streaming platform with video upload and processing, player with controls, user authentication, subscription tiers, content recommendations, watch history, playlists, comments, and admin panel. Use React for frontend and Node.js backend with video processing capabilities.',
+          'realtime-chat': 'Build a real-time chat application with WebSocket connections, multiple chat rooms, direct messaging, typing indicators, online status, message history, file sharing, user authentication, notifications, and modern chat UI. Include both frontend (React) and backend (Node.js with Socket.io).'
+        };
+        onQuickStart(templates[template] || '');
       }
     }
   };
@@ -215,22 +244,20 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
             </div>
             {showPreview && (
               <div className="live-preview-container" style={{ flex: 1, borderLeft: '1px solid var(--vscode-border)' }}>
-                <iframe
+                <webview
                   src={previewUrl}
                   className="live-preview-iframe"
-                  title="Live Preview"
-                  sandbox="allow-same-origin allow-scripts allow-forms"
+                  style={{ width: '100%', height: '100%' }}
                 />
               </div>
             )}
           </>
         ) : showPreview && !activeFile ? (
           <div className="live-preview-container" style={{ flex: 1 }}>
-            <iframe
+            <webview
               src={previewUrl}
               className="live-preview-iframe"
-              title="Live Preview"
-              sandbox="allow-same-origin allow-scripts allow-forms"
+              style={{ width: '100%', height: '100%' }}
             />
           </div>
         ) : (
@@ -238,17 +265,54 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
             <h1>ExternAI</h1>
             <p className="welcome-subtitle">AI-Powered Development Environment</p>
             <div className="welcome-actions">
-              <div className="welcome-section">
-                <h3>Create Project</h3>
-                <button className="welcome-button" onClick={() => handleCreateProject('website')}>
-                  Website Project
+              <div className="welcome-section primary-section">
+                <h3>Get Started</h3>
+                <button className="welcome-button primary" onClick={handleOpenFolder}>
+                  Open Folder
                 </button>
-                <button className="welcome-button" onClick={() => handleCreateProject('mobile')}>
-                  Mobile App Project
+                <button className="welcome-button" onClick={handleOpenFile}>
+                  Open File
                 </button>
-                <button className="welcome-button" onClick={() => handleCreateProject('game')}>
-                  Game Project
+              </div>
+              
+              <div className="welcome-section secondary-section">
+                <h3>Build Something Ambitious</h3>
+                <button className="welcome-button" onClick={() => handleQuickStart('ecommerce')}>
+                  E-commerce Platform
                 </button>
+                <button className="welcome-button" onClick={() => handleQuickStart('saas-dashboard')}>
+                  SaaS Dashboard
+                </button>
+                <button className="welcome-button" onClick={() => handleQuickStart('social-media')}>
+                  Social Media App
+                </button>
+                <button className="welcome-button" onClick={() => handleQuickStart('streaming')}>
+                  Video Streaming Platform
+                </button>
+                <button className="welcome-button" onClick={() => handleQuickStart('realtime-chat')}>
+                  Real-time Chat App
+                </button>
+              </div>
+            </div>
+            
+            <div className="welcome-footer">
+              <p className="welcome-tip">
+                <strong>Tip:</strong> Just tell the AI what you want to build in plain English!
+              </p>
+              <div className="welcome-details">
+                <p>The AI assistant can help you:</p>
+                <ul>
+                  <li>Build your entire website or app from scratch</li>
+                  <li>Fix any errors or bugs automatically</li>
+                  <li>Explain what your code does in simple terms</li>
+                  <li>Add new features to your project</li>
+                  <li>Make your design look better</li>
+                  <li><strong>Publish with one click</strong> - Get a shareable link instantly!</li>
+                </ul>
+                <p className="welcome-example">
+                  <strong>Try saying:</strong> "Build me a website where people can create an account, 
+                  share photos, and comment on each other's posts"
+                </p>
               </div>
             </div>
           </div>

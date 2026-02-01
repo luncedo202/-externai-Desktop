@@ -32,7 +32,7 @@ class AnalyticsService {
     });
 
     this.initialized = true;
-    console.log('✅ Google Analytics initialized:', this.measurementId);
+    console.log('[OK] Google Analytics initialized:', this.measurementId);
   }
 
   // Track page views

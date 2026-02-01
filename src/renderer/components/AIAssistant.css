@@ -315,28 +315,32 @@
 }
 
 .ai-message.user .message-content {
-  background: transparent;
-  color: #8ab4f8;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  color: #ffffff;
   margin-left: 0;
-  font-weight: 400;
-  text-shadow: none;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(30, 58, 138, 0.3);
 }
 
 [data-theme="light"] .ai-message.user .message-content {
-  color: #1a73e8;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  color: #ffffff;
 }
 
 .ai-message.assistant .message-content {
-  background: transparent;
+  background: none;
   color: #e8eaed;
   margin-right: 0;
   border: none;
   font-weight: 400;
-  backdrop-filter: none;
+  box-shadow: none;
 }
 
 [data-theme="light"] .ai-message.assistant .message-content {
+  background: none;
   color: #202124;
+  border: none;
 }
 
 [data-theme="light"] .ai-message.assistant .message-content h1,
@@ -363,41 +367,43 @@
 .ai-message.system .message-content {
   background: transparent;
   color: #9aa0a6;
-  border-left: none;
+  border-left: 2px solid rgba(255, 255, 255, 0.2);
   padding: 12px 16px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.01em;
 }
 
 [data-theme="light"] .ai-message.system .message-content {
   color: #5f6368;
   background: transparent;
+  border-left-color: rgba(0, 0, 0, 0.2);
 }
 
 .ai-message.system.executing .message-content,
 .ai-message.system[data-scanning="true"] .message-content {
   background: transparent;
-  border-left: none;
-  animation: none;
-  color: #f9ab00;
+  border-left-color: rgba(255, 255, 255, 0.3);
+  color: #9aa0a6;
 }
 
 [data-theme="light"] .ai-message.system.executing .message-content,
 [data-theme="light"] .ai-message.system[data-scanning="true"] .message-content {
-  color: #e37400;
+  color: #5f6368;
   background: transparent;
+  border-left-color: rgba(0, 0, 0, 0.3);
 }
 
 .ai-message.system.error .message-content {
   background: transparent;
-  border-left: none;
+  border-left-color: #ea4335;
   color: #f28b82;
 }
 
 [data-theme="light"] .ai-message.system.error .message-content {
   color: #c5221f;
   background: transparent;
+  border-left-color: #c5221f;
 }
 
 /* Command execution status indicators */
@@ -579,6 +585,75 @@
   border-color: rgba(244, 67, 54, 0.5);
 }
 
+/* Terminal Activity Indicator */
+.terminal-activity-indicator {
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  animation: slideInFromBottom 0.3s ease;
+}
+
+.terminal-activity-indicator.blocking {
+  background: rgba(255, 152, 0, 0.15);
+  border-top: 1px solid rgba(255, 152, 0, 0.3);
+  color: #ff9800;
+}
+
+.terminal-activity-indicator.long-running {
+  background: rgba(76, 175, 80, 0.1);
+  border-top: 1px solid rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.terminal-activity-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.terminal-activity-hint {
+  font-size: 11px;
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background: #4caf50;
+  border-radius: 50%;
+  animation: pulseDot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
+[data-theme="light"] .terminal-activity-indicator.blocking {
+  background: rgba(255, 152, 0, 0.1);
+  color: #e65100;
+}
+
+[data-theme="light"] .terminal-activity-indicator.long-running {
+  background: rgba(76, 175, 80, 0.08);
+  color: #2e7d32;
+}
+
+[data-theme="light"] .pulse-dot {
+  background: #2e7d32;
+}
+
 .ai-input:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -719,6 +794,92 @@
 
 .spinning {
   animation: spin 1s linear infinite;
+}
+
+/* GitHub Copilot-style thinking indicator */
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin: 8px 0;
+}
+
+.thinking-indicator .spinning {
+  color: #a78bfa;
+}
+
+[data-theme="light"] .thinking-indicator .spinning {
+  color: #7c3aed;
+}
+
+.thinking-text {
+  font-size: 13px;
+  color: #9aa0a6;
+  font-style: italic;
+}
+
+[data-theme="light"] .thinking-text {
+  color: #5f6368;
+}
+
+/* Terminal activity indicators */
+.terminal-activity-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  margin: 0;
+  font-size: 12px;
+  border-radius: 0;
+}
+
+.terminal-activity-indicator.blocking {
+  background: rgba(249, 115, 22, 0.1);
+  border-top: 1px solid rgba(249, 115, 22, 0.2);
+  color: #f97316;
+}
+
+.terminal-activity-indicator.blocking .spinning {
+  color: #f97316;
+}
+
+.terminal-activity-indicator.long-running {
+  background: rgba(34, 197, 94, 0.1);
+  border-top: 1px solid rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.terminal-activity-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.terminal-activity-hint {
+  font-size: 11px;
+  opacity: 0.8;
+  font-weight: 400;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+  }
 }
 
 @keyframes pulse {

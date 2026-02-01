@@ -9,8 +9,10 @@ import AuthScreen from './components/AuthScreen';
 import SplashScreen from './components/SplashScreen';
 import FirebaseService from './services/FirebaseService';
 import AnalyticsService from './services/AnalyticsService';
+import PublishService from './services/PublishService';
 import PricingPlans from './components/PricingPlans';
 import NodeWarning from './components/NodeWarning';
+import PublishedApps from './components/PublishedApps';
 import './App.css';
 
 function App() {
@@ -18,7 +20,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
-  const [nodeStatus, setNodeStatus] = useState({ checked: false, installed: true });
+  const [nodeStatus, setNodeStatus] = useState({ checked: false, installed: true, showWarning: false });
   const [activeView, setActiveView] = useState('explorer');
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
@@ -49,8 +51,16 @@ function App() {
   const [debugLogs, setDebugLogs] = useState([]);
   const [hasAiResponded, setHasAiResponded] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
+  const [showPublishedApps, setShowPublishedApps] = useState(false); // Show published apps modal
   const [devServerUrl, setDevServerUrl] = useState(null); // Track active dev server URL
   const [terminalOutputBuffer, setTerminalOutputBuffer] = useState(''); // PTY output for auto-fix
+  const [terminalActivity, setTerminalActivity] = useState({
+    isActive: false,           // Terminal has running process
+    isLongRunning: false,      // It's a dev server / watch process
+    lastCommand: '',           // Last executed command
+    startTime: null,           // When command started
+  });
+  const terminalActivityTimeout = useRef(null);
   const aiAssistantRef = useRef(null);
 
   // Initialize analytics and check authentication on app start
@@ -58,15 +68,6 @@ function App() {
     // Initialize Google Analytics
     AnalyticsService.init();
     AnalyticsService.trackPageView('App Start');
-
-    // Check if Node.js is installed
-    const checkNode = async () => {
-      if (window.electronAPI?.system?.checkNode) {
-        const result = await window.electronAPI.system.checkNode();
-        setNodeStatus({ checked: true, ...result });
-      }
-    };
-    checkNode();
 
     const unsubscribe = FirebaseService.onAuthChange((user) => {
       if (user) {
@@ -104,6 +105,43 @@ function App() {
 
   const toggleTheme = () => {
     setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
+  };
+
+  // Check Node.js only when a command that needs it is about to run
+  // With bundled Node.js, this should almost always succeed
+  const checkNodeBeforeCommand = async (command) => {
+    // List of commands that require Node.js
+    const nodeCommands = ['npm', 'npx', 'node', 'yarn', 'pnpm'];
+    const needsNode = nodeCommands.some(cmd => 
+      command.trim().startsWith(cmd) || command.includes(` ${cmd} `)
+    );
+
+    if (!needsNode) {
+      return true; // Command doesn't need Node.js, allow it
+    }
+
+    // Check if we've already verified Node.js is installed (bundled or system)
+    if (nodeStatus.checked && nodeStatus.installed) {
+      return true; // Already verified, Node.js is available
+    }
+
+    // Check if Node.js is available (bundled takes priority)
+    if (window.electronAPI?.system?.checkNode) {
+      const result = await window.electronAPI.system.checkNode();
+      // With bundled Node.js, this should return true
+      // Only show warning if neither bundled nor system Node.js is available
+      const isAvailable = result.installed || result.bundled;
+      setNodeStatus({ 
+        checked: true, 
+        installed: isAvailable, 
+        bundled: result.bundled,
+        showWarning: !isAvailable 
+      });
+      return isAvailable;
+    }
+
+    // If we can't check, assume Node.js is available (bundled should be there)
+    return true;
   };
 
   const handleToggleTerminal = () => {
@@ -208,7 +246,7 @@ function App() {
           const match = logText.match(pattern);
           if (match) {
             const detectedUrl = (match[1] || match[0]).replace(/\x1b\[[0-9;]*m/g, '').trim();
-            console.log('🌐 Auto-detected dev server from logs:', detectedUrl);
+            console.log('[INFO] Auto-detected dev server from logs:', detectedUrl);
             handleDevServerDetected(detectedUrl);
             break;
           }
@@ -269,12 +307,12 @@ function App() {
 
   // Handler for AI-created files - refreshes explorer without opening
   const handleFileCreatedByAI = async (filePath) => {
-    console.log('🔄 [App.jsx] File created by AI, refreshing explorer:', filePath);
+    console.log('[INFO] [App.jsx] File created by AI, refreshing explorer:', filePath);
 
     // Check if this file is currently open in any tab
     const isOpen = openFiles.some(f => f.id === filePath);
     if (isOpen) {
-      console.log('📝 [App.jsx] Open file was touched by AI, updating content:', filePath);
+      console.log('[INFO] [App.jsx] Open file was touched by AI, updating content:', filePath);
       const result = await window.electronAPI.fs.readFile(filePath);
       if (result.success) {
         setOpenFiles(prev => prev.map(f =>
@@ -307,8 +345,8 @@ function App() {
     );
   };
 
-  // Handler for Publish button - tells AI to deploy to Vercel
-  const handlePublishRequest = () => {
+  // Handler for Publish button - publishes to ExternAI hosting
+  const handlePublishRequest = async () => {
     if (!workspaceFolder) {
       console.log('No workspace folder opened');
       return;
@@ -319,10 +357,56 @@ function App() {
       return;
     }
 
-    // Send instruction to AI to deploy the project
-    aiAssistantRef.current.sendMessage(
-      'Please deploy this project to Vercel. Steps: 1) Install vercel CLI globally (npm i -g vercel), 2) Run "vercel --prod" (the user will be prompted to login via browser if first time), 3) Provide me with the deployment URL when complete.'
-    );
+    // Get project name from folder path
+    const projectName = workspaceFolder.split('/').pop() || 'my-app';
+
+    // Show publishing status in AI chat
+    aiAssistantRef.current.addSystemMessage('Publishing your app to ExternAI...');
+
+    try {
+      // Use PublishService to handle the upload
+      const result = await PublishService.publishProject(
+        workspaceFolder,
+        projectName,
+        (progress) => {
+          // Update status messages
+          if (progress.status === 'scanning') {
+            // Don't spam with every file
+          } else if (progress.status === 'uploading') {
+            aiAssistantRef.current.addSystemMessage('Uploading files to ExternAI servers...');
+          }
+        }
+      );
+
+      if (result.success) {
+        // Show success with shareable link
+        aiAssistantRef.current.addSystemMessage(
+          `**Your app is now live!**\n\n` +
+          `**Share this link:** ${result.url}\n\n` +
+          `Anyone with this link can use your app. ${result.isUpdate ? '(Updated existing deployment)' : ''}`
+        );
+        
+        // Open the URL in the browser
+        if (window.electronAPI?.shell?.openExternal) {
+          await window.electronAPI.shell.openExternal(result.url);
+        }
+      } else if (result.needsBuild) {
+        // Project needs to be built first
+        aiAssistantRef.current.sendMessage(
+          'The project needs to be built before publishing. Please run the build command (npm run build) and I will help you publish once it\'s ready.'
+        );
+      } else {
+        // Show error
+        aiAssistantRef.current.addSystemMessage(
+          `**Publishing failed:** ${result.error}\n\nPlease try again or check your project files.`
+        );
+      }
+    } catch (error) {
+      console.error('Publish error:', error);
+      aiAssistantRef.current.addSystemMessage(
+        `**Publishing failed:** ${error.message}\n\nPlease check your internet connection and try again.`
+      );
+    }
   };
 
   const handleOpenFolder = async (folderPath) => {
@@ -373,13 +457,114 @@ function App() {
     ));
   };
 
-  // Handler for terminal output - captures PTY output for auto-fix
+  // Long-running commands that should allow user prompts
+  const LONG_RUNNING_PATTERNS = [
+    /npm\s+(start|run\s+dev|run\s+start|run\s+serve|run\s+watch)/i,
+    /yarn\s+(start|dev|serve|watch)/i,
+    /pnpm\s+(start|dev|serve|watch)/i,
+    /node\s+.*server/i,
+    /nodemon/i,
+    /vite(\s|$)/i,
+    /webpack\s+serve/i,
+    /next\s+dev/i,
+    /nuxt\s+dev/i,
+    /ng\s+serve/i,
+    /gatsby\s+develop/i,
+    /python\s+-m\s+http\.server/i,
+    /live-server/i,
+    /http-server/i,
+    /serve(\s|$)/i,
+    /--watch/i,
+    /-w(\s|$)/i,
+  ];
+
+  // Handler for terminal output - captures PTY output for auto-fix and activity tracking
   const handleTerminalOutput = (terminalId, newData, fullBuffer) => {
     setTerminalOutputBuffer(fullBuffer);
+    
+    // Detect command execution from terminal output
+    const lowerData = newData.toLowerCase();
+    
+    // Check if this looks like a command being executed
+    const commandPatterns = [
+      /\$\s*(.+)/,           // $ npm start
+      />\s*(.+)/,            // > npm start
+      /❯\s*(.+)/,            // ❯ npm start (fish/starship)
+      /npm\s+(run|start|install)/i,
+      /yarn\s+/i,
+      /pnpm\s+/i,
+      /node\s+/i,
+      /python\s+/i,
+    ];
+    
+    const isCommandStart = commandPatterns.some(p => p.test(newData));
+    
+    // Check if it's a long-running command
+    const isLongRunning = LONG_RUNNING_PATTERNS.some(p => p.test(newData));
+    
+    // Check for completion indicators
+    const completionPatterns = [
+      'error:', 'failed', 'success', 'done', 'completed', 
+      'exit code', 'exited', 'npm err', 'error', 'built in',
+      /\$\s*$/, />\s*$/, /❯\s*$/ // Back to prompt
+    ];
+    const isCompleted = completionPatterns.some(p => 
+      typeof p === 'string' ? lowerData.includes(p) : p.test(newData)
+    );
+    
+    // Detect dev server running indicators
+    const devServerRunning = [
+      'listening on', 'server running', 'ready in', 'started server',
+      'local:', 'localhost:', 'http://localhost', 'compiled successfully',
+      'watching for file changes', 'waiting for changes'
+    ].some(p => lowerData.includes(p));
+    
+    if (isCommandStart && !isCompleted) {
+      // Command started
+      setTerminalActivity({
+        isActive: true,
+        isLongRunning: isLongRunning || devServerRunning,
+        lastCommand: newData.trim().slice(0, 50),
+        startTime: Date.now(),
+      });
+      
+      // Clear any existing timeout
+      if (terminalActivityTimeout.current) {
+        clearTimeout(terminalActivityTimeout.current);
+      }
+      
+      // For non-long-running commands, auto-clear activity after idle
+      if (!isLongRunning) {
+        terminalActivityTimeout.current = setTimeout(() => {
+          setTerminalActivity(prev => ({
+            ...prev,
+            isActive: false,
+          }));
+        }, 3000); // 3 seconds of no output = idle
+      }
+    } else if (devServerRunning) {
+      // Dev server is now running - mark as long-running
+      setTerminalActivity(prev => ({
+        ...prev,
+        isLongRunning: true,
+      }));
+    } else if (isCompleted && !devServerRunning) {
+      // Command completed (but not a dev server)
+      if (terminalActivityTimeout.current) {
+        clearTimeout(terminalActivityTimeout.current);
+      }
+      terminalActivityTimeout.current = setTimeout(() => {
+        setTerminalActivity(prev => ({
+          ...prev,
+          isActive: false,
+          isLongRunning: false,
+        }));
+      }, 500);
+    }
   };
 
   const handleDevServerDetected = (url) => {
-    console.log('🌐 Dev server detected:', url);
+    console.log('[INFO] Dev server detected:', url);
     setDevServerUrl(url);
 
     // Auto-open in external browser
@@ -396,7 +581,7 @@ function App() {
   const handleFileUpdate = async () => {
     if (!devServerUrl) return; // No dev server running
 
-    console.log('📝 File updated, auto-opening browser at:', devServerUrl);
+    console.log('[INFO] File updated, auto-opening browser at:', devServerUrl);
 
     // Wait for HMR to process the update
     await new Promise(resolve => setTimeout(resolve, 800));
@@ -404,9 +589,9 @@ function App() {
     // Open browser
     try {
       await window.electronAPI.shell.openExternal(devServerUrl);
-      console.log('✅ Browser opened successfully');
+      console.log('[OK] Browser opened successfully');
     } catch (err) {
-      console.error('❌ Failed to open browser:', err);
+      console.error('[ERROR] Failed to open browser:', err);
     }
   };
 
@@ -540,6 +725,7 @@ function App() {
           activeView={activeView}
           onViewChange={setActiveView}
           onAIToggle={() => setAiVisible(!aiVisible)}
+          onShowPublishedApps={() => setShowPublishedApps(true)}
         />
         {sidebarVisible && (
           <Sidebar
@@ -608,6 +794,8 @@ function App() {
           onFirstResponse={() => setHasAiResponded(true)}
           devServerUrl={devServerUrl}
           terminalOutput={terminalOutputBuffer}
+          terminalActivity={terminalActivity}
+          checkNodeBeforeCommand={checkNodeBeforeCommand}
         />
       </div>
       <StatusBar
@@ -622,8 +810,11 @@ function App() {
           userEmail={currentUser?.email}
         />
       )}
-      {nodeStatus.checked && !nodeStatus.installed && (
-        <NodeWarning onDismiss={() => setNodeStatus(prev => ({ ...prev, installed: true }))} />
+      {showPublishedApps && (
+        <PublishedApps onClose={() => setShowPublishedApps(false)} />
+      )}
+      {nodeStatus.showWarning && (
+        <NodeWarning onDismiss={() => setNodeStatus(prev => ({ ...prev, showWarning: false }))} />
       )}
     </div>
   );

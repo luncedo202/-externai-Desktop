@@ -157,12 +157,14 @@ const AIAssistant = forwardRef(({
   onFirstResponse,
   visible,
   devServerUrl,
-  terminalOutput
+  terminalOutput,
+  terminalActivity = { isActive: false, isLongRunning: false, lastCommand: '' },
+  checkNodeBeforeCommand
 }, ref) => {
   // Load messages from localStorage if available, but reset if workspaceFolder changes
   const defaultWelcome = {
     role: 'assistant',
-    content: 'Hello! I\'m your AI coding assistant.\n\nI can help you build software:\n\n• Create complete, working code for websites, mobile apps, and games\n• Debug and fix errors with clear explanations\n• Explain code in simple, beginner-friendly terms\n• Build full project structures ready to deploy\n• Understand your entire project - I can see all your files\n• Run terminal commands automatically\n\nJust tell me what you want to build:\n- "Create a landing page for my startup"\n- "Build a contact form with email validation"\n- "Make a simple game"\n- "Add a login page to my website"\n\nI\'ll immediately create the files and run any necessary commands. No manual steps required.\n\nWhat would you like to build?',
+    content: 'Hello! I\'m your AI coding assistant.\n\nI can help you build software:\n\n• Create complete, working code for websites, mobile apps, and games\n• Debug and fix errors with clear explanations\n• Explain code in simple, beginner-friendly terms\n• Build full project structures ready to deploy\n• Understand your entire project - I can see all your files\n• Run terminal commands automatically\n• **Publish your app with one click** - Get a shareable link instantly!\n\nJust tell me what you want to build:\n- "Create a landing page for my startup"\n- "Build a contact form with email validation"\n- "Make a simple game"\n- "Add a login page to my website"\n\nI\'ll immediately create the files and run any necessary commands. When you\'re ready, click **Publish** to get a link you can share with anyone!\n\nWhat would you like to build?',
   };
 
   const [messages, setMessages] = useState(() => {
@@ -294,7 +296,7 @@ const AIAssistant = forwardRef(({
   const handleRetryAutoFix = async (context) => {
     if (!context) return;
 
-    console.log('🔄 Retrying auto-fix...');
+    console.log('[INFO] Retrying auto-fix...');
 
     // Remove the error message
     setMessages(prev => prev.filter(msg => !msg.isRetryError));
@@ -306,7 +308,7 @@ const AIAssistant = forwardRef(({
       {
         id: retryStatusId,
         role: 'system',
-        content: '🔄 **Retrying auto-fix...**\n\nChecking backend connection and attempting fix again...',
+        content: '**Retrying auto-fix...**\n\nChecking backend connection and attempting fix again...',
         isWorking: true
       }
     ]);
@@ -371,7 +373,7 @@ const AIAssistant = forwardRef(({
         throw new Error(fixResponse?.error || 'Invalid response from AI');
       }
     } catch (error) {
-      console.error('❌ Retry failed:', error);
+      console.error('[ERROR] Retry failed:', error);
 
       // Remove retry status
       setMessages(prev => prev.filter(msg => msg.id !== retryStatusId));
@@ -401,7 +403,7 @@ const AIAssistant = forwardRef(({
     let specificGuidance = '';
 
     if (isConnectionError) {
-      specificGuidance = `### 🔧 Backend Connection Issue
+      specificGuidance = `### Backend Connection Issue
 
 The backend server is not reachable. To enable auto-fix:
 
@@ -413,7 +415,7 @@ npm start    # Start backend server
 
 Wait for "Server running on port 5000" message, then click **Retry** below.`;
     } else if (isTimeout) {
-      specificGuidance = `### ⏱️ Request Timeout
+      specificGuidance = `### Request Timeout
 
 The AI service took too long to respond. This can happen with complex fixes.
 
@@ -422,7 +424,7 @@ The AI service took too long to respond. This can happen with complex fixes.
 2. Or simplify your question/command
 3. Or fix the error manually`;
     } else if (isRateLimit) {
-      specificGuidance = `### 🚫 Rate Limit Exceeded
+      specificGuidance = `### Rate Limit Exceeded
 
 Too many requests to the AI service. Wait 1-2 minutes and try again.
 
@@ -431,7 +433,7 @@ Too many requests to the AI service. Wait 1-2 minutes and try again.
 2. Fix the error manually
 3. Continue with your project and auto-fix will work after cooldown`;
     } else {
-      specificGuidance = `### 💡 Suggestions
+      specificGuidance = `### Suggestions
 
 **Manual Fix Options:**
 1. Read the error message above carefully
@@ -444,7 +446,7 @@ Too many requests to the AI service. Wait 1-2 minutes and try again.
 - Verify ANTHROPIC_API_KEY in backend/.env`;
     }
 
-    return `## 🔴 Auto-Fix Failed
+    return `## Auto-Fix Failed
 
 **Error:** ${errorMsg}
 
@@ -452,7 +454,7 @@ ${specificGuidance}
 
 ---
 
-### 🤔 What Is Auto-Fix?
+### What Is Auto-Fix?
 
 When a command fails, auto-fix automatically:
 1. Analyzes the error output
@@ -554,11 +556,11 @@ It requires the backend server to communicate with Claude AI.`;
   // Core send message logic (can be called internally or externally)
   const sendMessage = async (messageText, attachedImgs = []) => {
     if (!messageText || messageText.replace(/\s/g, '') === '') {
-      console.log('🛑 sendMessage blocked: messageText is empty or whitespace only');
+      console.log('� sendMessage blocked: messageText is empty or whitespace only');
       return;
     }
     if (isLoading) {
-      console.log('🛑 sendMessage blocked: isLoading is true');
+      console.log('� sendMessage blocked: isLoading is true');
       return;
     }
 
@@ -566,7 +568,7 @@ It requires the backend server to communicate with Claude AI.`;
     if (!workspaceFolderRef.current) {
       setMessages(prev => [...prev, {
         role: 'system',
-        content: '⚠️ No workspace folder is open. Opening folder picker...'
+        content: 'No workspace folder is open. Opening folder picker...'
       }]);
 
       try {
@@ -575,7 +577,7 @@ It requires the backend server to communicate with Claude AI.`;
         if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
           setMessages(prev => [...prev, {
             role: 'system',
-            content: '❌ You must open a workspace folder to continue. Please click **File > Open Folder** from the menu.'
+            content: 'You must open a workspace folder to continue. Please click **File > Open Folder** from the menu.'
           }]);
           return;
         }
@@ -589,7 +591,7 @@ It requires the backend server to communicate with Claude AI.`;
         console.error('Failed to open folder:', err);
         setMessages(prev => [...prev, {
           role: 'system',
-          content: '❌ Failed to open folder. Please click **File > Open Folder** from the menu to select a workspace.'
+          content: 'Failed to open folder. Please click **File > Open Folder** from the menu to select a workspace.'
         }]);
         return;
       }
@@ -601,7 +603,7 @@ It requires the backend server to communicate with Claude AI.`;
     let messageContent = userMessage;
     if (attachedImgs.length > 0) {
       const imageUrls = attachedImgs.map(img =>
-        `\n\n📷 Image: ${img.urls.regular} (by ${img.user.name} on Unsplash)`
+        `\n\nImage: ${img.urls.regular} (by ${img.user.name} on Unsplash)`
       ).join('');
       messageContent = userMessage + imageUrls;
     }
@@ -618,7 +620,7 @@ It requires the backend server to communicate with Claude AI.`;
       lastSubmittedMessageRef.current.content === messageContent &&
       Date.now() - lastSubmittedMessageRef.current.timestamp < 50
     ) {
-      console.log('🛑 Duplicate message blocked (StrictMode double-invoke)');
+      console.log('� Duplicate message blocked (StrictMode double-invoke)');
       return;
     }
 
@@ -773,7 +775,7 @@ It requires the backend server to communicate with Claude AI.`;
       // ============================================================
       if (conversationHistory.current.length <= KEEP_INITIAL_MESSAGES &&
         !ProjectStateService.isInitialized()) {
-        console.log('🔍 [Layer 2] Extracting project state from initial messages...');
+        console.log('� [Layer 2] Extracting project state from initial messages...');
         ProjectStateService.extractFromMessages(conversationHistory.current);
       }
 
@@ -783,7 +785,7 @@ It requires the backend server to communicate with Claude AI.`;
       let prunedMessages = enhancedPrompt;
 
       if (conversationHistory.current.length > CONVERSATION_THRESHOLD) {
-        console.log(`📊 [Layer 3] Conversation has ${conversationHistory.current.length} messages, pruning...`);
+        console.log(`[INFO] [Layer 3] Conversation has ${conversationHistory.current.length} messages, pruning...`);
 
         // Check if we need to generate a new summary
         const messagesToSummarize = conversationHistory.current.slice(
@@ -793,12 +795,12 @@ It requires the backend server to communicate with Claude AI.`;
 
         if (messagesToSummarize.length > 0 && !conversationSummary.current) {
           try {
-            console.log(`📝 [Layer 3] Summarizing ${messagesToSummarize.length} old messages...`);
+            console.log(`[INFO] [Layer 3] Summarizing ${messagesToSummarize.length} old messages...`);
             const summary = await ClaudeService.summarizeConversation(messagesToSummarize);
             conversationSummary.current = summary;
-            console.log('✅ [Layer 3] Summary generated:', summary.substring(0, 100) + '...');
+            console.log('[OK] [Layer 3] Summary generated:', summary.substring(0, 100) + '...');
           } catch (err) {
-            console.warn('⚠️ [Layer 3] Summarization failed, continuing without summary:', err);
+            console.warn('[WARN] [Layer 3] Summarization failed, continuing without summary:', err);
           }
         }
 
@@ -807,10 +809,10 @@ It requires the backend server to communicate with Claude AI.`;
         const recentMessages = enhancedPrompt.slice(-KEEP_RECENT_MESSAGES);
         prunedMessages = [...initialMessages, ...recentMessages];
 
-        console.log(`✂️ [Layer 3] Pruned from ${enhancedPrompt.length} to ${prunedMessages.length} messages`);
+        console.log(`[INFO] [Layer 3] Pruned from ${enhancedPrompt.length} to ${prunedMessages.length} messages`);
       }
 
-      console.log('🚀 Starting Claude stream...');
+      console.log('[INFO] Starting Claude stream...');
 
       // Track AI request start
       const requestStartTime = Date.now();
@@ -839,11 +841,11 @@ It requires the backend server to communicate with Claude AI.`;
         conversationSummary.current // Layer 3: Conversation summary
       );
 
-      console.log('🤖 Claude stream completed:', response);
+      console.log('� Claude stream completed:', response);
 
       if (response && response.success) {
-        console.log('✅ Stream successful, finalizing message...');
-        console.log('📝 Response content length:', response.message?.length);
+        console.log('[OK] Stream successful, finalizing message...');
+        console.log('[INFO] Response content length:', response.message?.length);
 
         // Finalize the streaming message
         setMessages(prev => prev.map(msg =>
@@ -863,18 +865,18 @@ It requires the backend server to communicate with Claude AI.`;
         if (workspaceFolderRef.current) {
           setTimeout(async () => {
             try {
-              console.log('🤖 AI response received - processing automatically...');
+              console.log('[INFO] AI response received - processing automatically...');
               const codeBlocks = extractCodeBlocks(response.message);
               const commands = extractCommands(response.message);
 
-              console.log(`📄 Found ${codeBlocks.length} code blocks to create`);
-              console.log(`⚡ Found ${commands.length} commands to execute`);
+              console.log(`[INFO] Found ${codeBlocks.length} code blocks to create`);
+              console.log(`[INFO] Found ${commands.length} commands to execute`);
 
               // STEP 1: Create files FIRST (so commands can use them)
               if (codeBlocks.length > 0) {
-                console.log('📁 Creating files first...');
+                console.log('[INFO] Creating files first...');
                 await handleCreateFilesAutomatically(response.message, assistantMessage.id);
-                console.log('✅ Files created successfully');
+                console.log('[OK] Files created successfully');
 
                 // Wait a bit for filesystem to sync
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -882,17 +884,17 @@ It requires the backend server to communicate with Claude AI.`;
 
               // STEP 2: Execute commands AFTER files are created
               if (commands.length > 0) {
-                console.log('⚡ Executing commands now...');
+                console.log('[INFO] Executing commands now...');
                 await executeCommandsAutomatically(response.message);
-                console.log('✅ Commands executed successfully');
+                console.log('[OK] Commands executed successfully');
               }
 
               if (codeBlocks.length === 0 && commands.length === 0) {
-                console.log('ℹ️ No files or commands to process - AI provided explanation only');
+                console.log('[INFO] No files or commands to process - AI provided explanation only');
               }
             } catch (error) {
-              console.error('❌ Error processing response:', error);
-              console.error('❌ Error stack:', error.stack);
+              console.error('[ERROR] Error processing response:', error);
+              console.error('[ERROR] Error stack:', error.stack);
             }
           }, WORKSPACE_SCAN_DELAY);
         }
@@ -936,7 +938,7 @@ It requires the backend server to communicate with Claude AI.`;
           ...prev.filter(msg => msg.id !== streamingMessageId),
           {
             role: 'system',
-            content: `🔒 **Free Prompts Exhausted**\n\nYou've used all 25 free AI prompts. To continue using AI features, please subscribe to a paid plan.\n\n**Benefits of subscribing:**\n• Unlimited AI prompts\n• Priority support\n• Advanced features\n• Faster response times\n\n[Subscribe Now](#) to continue building amazing projects!`
+            content: `**Free Prompts Exhausted**\n\nYou've used all 25 free AI prompts. To continue using AI features, please subscribe to a paid plan.\n\n**Benefits of subscribing:**\n• Unlimited AI prompts\n• Priority support\n• Advanced features\n• Faster response times\n\n[Subscribe Now](#) to continue building amazing projects!`
           }
         ]);
 
@@ -949,7 +951,7 @@ It requires the backend server to communicate with Claude AI.`;
           ...prev.filter(msg => msg.id !== streamingMessageId),
           {
             role: 'assistant',
-            content: `❌ **Error:** ${error.message}\n\nPlease check:\n1. Your API key is correctly configured\n2. You have API credits available\n3. Your internet connection is working\n\nTry asking your question again!`
+            content: `**Error:** ${error.message}\n\nPlease check:\n1. Your API key is correctly configured\n2. You have API credits available\n3. Your internet connection is working\n\nTry asking your question again!`
           }
         ]);
       }
@@ -966,12 +968,19 @@ It requires the backend server to communicate with Claude AI.`;
   useImperativeHandle(ref, () => ({
     sendMessage: (messageText) => {
       sendMessage(messageText, []);
+    },
+    addSystemMessage: (content) => {
+      setMessages(prev => [...prev, {
+        id: Date.now() + Math.random(),
+        role: 'system',
+        content
+      }]);
     }
   }));
 
   // Handle stopping AI generation and command execution
   const handleStopGeneration = () => {
-    console.log('🛑 Stopping AI generation and commands...');
+    console.log('� Stopping AI generation and commands...');
 
     // Stop AI streaming
     if (abortControllerRef.current) {
@@ -1166,15 +1175,15 @@ It requires the backend server to communicate with Claude AI.`;
     e.stopPropagation();
     // Guard against double submissions
     if (isSubmittingRef.current) {
-      console.log('🛑 Blocked: Submission already in progress (isSubmittingRef)');
+      console.log('� Blocked: Submission already in progress (isSubmittingRef)');
       return;
     }
     if (!input || input.replace(/\s/g, '') === '') {
-      console.log('🛑 Blocked: Input is empty or whitespace only');
+      console.log('� Blocked: Input is empty or whitespace only');
       return;
     }
     if (isLoading) {
-      console.log('🛑 Blocked: AI is still loading (isLoading)');
+      console.log('� Blocked: AI is still loading (isLoading)');
       return;
     }
     const messageText = input.trim();
@@ -1353,7 +1362,7 @@ Could you provide more details about what you'd like to build?`;
     // Use a more reliable approach: split by ``` markers
     const parts = content.split('```');
 
-    console.log('🔍 Extracting code blocks, found', Math.floor(parts.length / 2), 'potential blocks');
+    console.log('� Extracting code blocks, found', Math.floor(parts.length / 2), 'potential blocks');
 
     // Parts at odd indices (1, 3, 5...) are inside code blocks
     for (let i = 1; i < parts.length; i += 2) {
@@ -1397,7 +1406,7 @@ Could you provide more details about what you'd like to build?`;
       // Clean up the code - remove only leading/trailing empty lines, preserve internal structure
       const cleanCode = code.replace(/^\n+/, '').replace(/\n+$/, '');
 
-      console.log('✅ Found code block:', language, 'filename:', filename, 'code length:', cleanCode.length);
+      console.log('[OK] Found code block:', language, 'filename:', filename, 'code length:', cleanCode.length);
 
       blocks.push({
         language: language,
@@ -1406,7 +1415,7 @@ Could you provide more details about what you'd like to build?`;
       });
     }
 
-    console.log('📦 extractCodeBlocks found:', blocks.length, 'total blocks');
+    console.log('� extractCodeBlocks found:', blocks.length, 'total blocks');
     return blocks;
   };
 
@@ -1849,13 +1858,13 @@ Could you provide more details about what you'd like to build?`;
     // Request user confirmation before running
     const confirmed = await requestCommandConfirmation(commands, isAutoFixCommand);
     if (!confirmed) {
-      console.log('❌ User cancelled command execution');
+      console.error('[ERROR] User cancelled command execution');
       return;
     }
 
     // Wait if terminal is already busy (prevents command collision)
     if (isTerminalBusy) {
-      console.log('⏳ Terminal busy, waiting...');
+      console.log('� Terminal busy, waiting...');
       // Wait up to 30 seconds for terminal to be free
       let waitTime = 0;
       while (isTerminalBusy && waitTime < 30000) {
@@ -1900,6 +1909,17 @@ Could you provide more details about what you'd like to build?`;
         const command = commands[i];
         const commandId = Date.now() + Math.random();
         const statusMessageId = `status-${commandId}`;
+
+        // Check if command needs Node.js before executing
+        if (checkNodeBeforeCommand) {
+          const hasNode = await checkNodeBeforeCommand(command);
+          if (!hasNode) {
+            console.error('[ERROR] Node.js not found, aborting command execution');
+            setMessages(prev => prev.filter(m => m.id !== statusMessageId));
+            break; // Stop executing commands if Node.js is missing
+          }
+        }
+
         const isInstallCommand = command.includes('npm install') || command.includes('npm i ') ||
           command.includes('yarn install') || command.includes('pnpm install');
         const isRunCommand = command.includes('npm run') || command.includes('npm start') ||
@@ -2062,7 +2082,7 @@ Could you provide more details about what you'd like to build?`;
 
             if (detectedUrl) {
               detectedUrl = detectedUrl.replace(/\x1b\[[0-9;]*m/g, '').trim();
-              console.log('🌐 Auto-detection for preview:', detectedUrl);
+              console.log('� Auto-detection for preview:', detectedUrl);
 
               if (onDevServerDetected) {
                 onDevServerDetected(detectedUrl);
@@ -2333,13 +2353,13 @@ Remember: Use filename= format for any code files you create or modify.`
   // Execute commands based on Commander AI's intelligent decisions
   const executeCommandsFromCommanderAI = async (commands) => {
     if (!workspaceFolderRef.current) {
-      console.log('⚠️ No workspace folder - skipping command execution');
+      console.warn('[WARN] No workspace folder - skipping command execution');
       return;
     }
 
     setIsTerminalBusy(true);
     try {
-      console.log('⚡ Executing', commands.length, 'commands from Commander AI analysis');
+      console.log('� Executing', commands.length, 'commands from Commander AI analysis');
 
       // Sort commands by order
       const sortedCommands = [...commands].sort((a, b) => a.order - b.order);
@@ -2349,13 +2369,13 @@ Remember: Use filename= format for any code files you create or modify.`
 
         // Skip unsafe commands
         if (!cmdSpec.isSafe) {
-          console.log('⚠️ Skipping unsafe command:', cmdSpec.command);
+          console.warn('[WARN] Skipping unsafe command:', cmdSpec.command);
           continue;
         }
 
-        console.log(`⚡ Executing command ${i + 1}/${sortedCommands.length}:`, cmdSpec.command);
-        console.log('📋 Reason:', cmdSpec.reason);
-        console.log('📁 Working directory:', workspaceFolderRef.current);
+        console.log(`[INFO] Executing command ${i + 1}/${sortedCommands.length}:`, cmdSpec.command);
+        console.log('[INFO] Reason:', cmdSpec.reason);
+        console.log('[INFO] Working directory:', workspaceFolderRef.current);
 
         // Create a system message showing the command being executed
         const commandId = `command-${Date.now()}-${i}`;
@@ -2398,9 +2418,9 @@ Remember: Use filename= format for any code files you create or modify.`
             if (projectName) {
               const newProjectPath = `${workspaceFolderRef.current}/${projectName}`;
 
-              console.log('🎉 New project detected:', projectName);
-              console.log('📁 Project path:', newProjectPath);
-              console.warn('⚠️ IMPORTANT: User needs to open the new project folder!');
+              console.log('[OK] New project detected:', projectName);
+              console.log('[INFO] Project path:', newProjectPath);
+              console.warn('[WARN] IMPORTANT: User needs to open the new project folder!');
 
               // Add prominent warning message
               setMessages(prev => [
@@ -2408,7 +2428,7 @@ Remember: Use filename= format for any code files you create or modify.`
                 {
                   id: Date.now() + Math.random(),
                   role: 'system',
-                  content: `🚨 **IMPORTANT: New Project Folder Detected!**\n\n✅ **Project created: \`${projectName}\`**\n\n⚠️ **YOU MUST OPEN THE NEW FOLDER NOW**\n\nThe AI will try to work on the previous project if you don't switch folders.\n\n**Steps to switch:**\n1. Click **File → Open Folder** (top menu)\n2. Navigate to: \`${newProjectPath}\`\n3. Select the folder and click Open\n\n**OR** use the folder icon in the sidebar (left side)\n\nThis clears the AI's memory and ensures commands run in the correct directory.`,
+                  content: `**IMPORTANT: New Project Folder Detected!**\n\n**Project created: \`${projectName}\`**\n\n**YOU MUST OPEN THE NEW FOLDER NOW**\n\nThe AI will try to work on the previous project if you don't switch folders.\n\n**Steps to switch:**\n1. Click **File → Open Folder** (top menu)\n2. Navigate to: \`${newProjectPath}\`\n3. Select the folder and click Open\n\n**OR** use the folder icon in the sidebar (left side)\n\nThis clears the AI's memory and ensures commands run in the correct directory.`,
                   isError: true  // Make it red/prominent
                 }
               ]);
@@ -2423,7 +2443,7 @@ Remember: Use filename= format for any code files you create or modify.`
             result.error
           );
 
-          console.log('👁️ Supervisor AI command analysis:', supervision);
+          console.log('[INFO] Supervisor AI command analysis:', supervision);
 
           // Auto-open browser if dev server command was successful
           if (result.success && (
@@ -2433,7 +2453,7 @@ Remember: Use filename= format for any code files you create or modify.`
             cmdSpec.command.match(/pnpm\s+dev/) ||
             cmdSpec.command.match(/vite(\s+dev)?$/)
           )) {
-            console.log('🌐 Dev server command detected, attempting to open browser...');
+            console.log('� Dev server command detected, attempting to open browser...');
 
             // Wait a bit for server to start, then try to detect port from output
             setTimeout(async () => {
@@ -2452,7 +2472,7 @@ Remember: Use filename= format for any code files you create or modify.`
                 url = viteMatch[1];
               }
 
-              console.log('🌐 Opening browser at:', url);
+              console.log('� Opening browser at:', url);
 
               // Open in default browser
               try {
@@ -2501,7 +2521,7 @@ Remember: Use filename= format for any code files you create or modify.`
 
           // If Supervisor AI detected an error, pause and provide context
           if (supervision.analysis.shouldPauseChatAI && supervision.analysis.errorDetails) {
-            console.log('⚠️ Supervisor AI pausing workflow due to error');
+            console.warn('[WARN] Supervisor AI pausing workflow due to error');
 
             // Add error context message for Chat AI
             setMessages(prev => [
@@ -2522,7 +2542,7 @@ Remember: Use filename= format for any code files you create or modify.`
             await new Promise(resolve => setTimeout(resolve, COMMAND_EXECUTION_DELAY));
           }
         } catch (error) {
-          console.error('❌ Error executing command:', error);
+          console.error('[ERROR] Error executing command:', error);
           setMessages(prev => prev.map(msg => {
             if (msg.id === commandId) {
               return {
@@ -2545,17 +2565,17 @@ Remember: Use filename= format for any code files you create or modify.`
   // Create files based on Executor AI's intelligent decisions
   // Automatically create files in background - NO user interaction needed
   const handleCreateFilesAutomatically = async (messageContent, messageId) => {
-    console.log('📁 handleCreateFilesAutomatically called');
-    console.log('📂 Workspace folder (ref):', workspaceFolderRef.current);
+    console.log('[INFO] handleCreateFilesAutomatically called');
+    console.log('� Workspace folder (ref):', workspaceFolderRef.current);
 
     if (!workspaceFolderRef.current) {
-      console.warn('⚠️ No workspace folder - skipping file creation. User needs to open a folder first.');
+      console.warn('[WARN] No workspace folder - skipping file creation. User needs to open a folder first.');
       return; // Silently fail if no workspace
     }
 
     const codeBlocks = extractCodeBlocks(messageContent);
 
-    console.log('📦 Code blocks extracted:', codeBlocks.length);
+    console.log('� Code blocks extracted:', codeBlocks.length);
 
     // Filter out command blocks (bash, sh, shell) - those are for execution, not file creation
     // Also filter out blocks without explicit filenames
@@ -2570,14 +2590,14 @@ Remember: Use filename= format for any code files you create or modify.`
       return !isCommand && hasFilename;
     });
 
-    console.log('📄 File blocks (after filtering):', fileBlocks.length);
+    console.log('[INFO] File blocks (after filtering):', fileBlocks.length);
 
     if (fileBlocks.length === 0) {
-      console.warn('⚠️ No file code blocks found - AI response had no files with filename= attribute');
+      console.warn('[WARN] No file code blocks found - AI response had no files with filename= attribute');
       return; // No code blocks for files, nothing to do
     }
 
-    console.log('✨ Starting automatic file creation for', fileBlocks.length, 'code blocks');
+    console.log('[INFO] Starting automatic file creation for', fileBlocks.length, 'code blocks');
 
     // Show file creation overview - removed, we show each file individually
 
@@ -2611,15 +2631,6 @@ Remember: Use filename= format for any code files you create or modify.`
         let filePath = `${workspaceFolderRef.current}/${fileName}`;
         const checkResult = await window.electronAPI.fs.readFile(filePath);
         const isUpdating = checkResult.success;
-        
-        // Show concise Copilot-style explanation
-        const actionWord = isUpdating ? 'Updated' : 'Created';
-        setMessages(prev => [...prev, {
-          id: `file-explain-${Date.now()}-${i}`,
-          role: 'system',
-          content: `${actionWord} ${fileName} - ${filePurpose}`,
-          isFileCreation: true
-        }]);
 
         // Update with filename
         setCodeBlockStates(prev => ({
@@ -2628,9 +2639,9 @@ Remember: Use filename= format for any code files you create or modify.`
         }));
         
         if (isUpdating) {
-          debug('♻️ File exists, will be overwritten:', fileName);
+          debug('File exists, will be overwritten:', fileName);
         } else {
-          debug('✅ Creating new file:', fileName);
+          debug('Creating new file:', fileName);
         }
 
         // Create parent directories if needed
@@ -2639,7 +2650,7 @@ Remember: Use filename= format for any code files you create or modify.`
           debug('📁 Creating parent directory:', dirPath);
           const dirResult = await window.electronAPI.fs.createDir(dirPath);
           if (!dirResult.success && !dirResult.error?.includes('EEXIST')) {
-            console.error('❌ Failed to create directory:', dirResult.error);
+            console.error('[ERROR] Failed to create directory:', dirResult.error);
             setCodeBlockStates(prev => ({
               ...prev,
               [blockId]: { status: 'failed', filename: fileName, error: `Failed to create directory: ${dirResult.error}` }
@@ -2657,11 +2668,11 @@ Remember: Use filename= format for any code files you create or modify.`
         if (result.success) {
           debug('✍️ Writing content to file...');
           const writeResult = await window.electronAPI.fs.writeFile(filePath, block.code);
-          console.log('💾 Write result:', writeResult);
+          console.log('� Write result:', writeResult);
           if (writeResult.success) {
             createdCount++;
             createdFiles.push(fileName);
-            console.log('✅ File created successfully:', fileName);
+            console.log('[OK] File created successfully:', fileName);
             setCodeBlockStates(prev => ({
               ...prev,
               [blockId]: { status: 'created', filename: fileName }
@@ -2669,13 +2680,13 @@ Remember: Use filename= format for any code files you create or modify.`
             // Add delay to ensure filesystem sync before notifying
             await new Promise(resolve => setTimeout(resolve, 300));
             if (onFileCreated) {
-              console.log('🔄 Calling onFileCreated callback for:', fileName);
+              console.log('[INFO] Calling onFileCreated callback for:', fileName);
               onFileCreated(filePath);
             } else {
-              console.log('⚠️ No onFileCreated callback available');
+              console.warn('[WARN] No onFileCreated callback available');
             }
           } else {
-            console.error('❌ Failed to write file:', writeResult.error, 'File:', filePath, 'Block:', block);
+            console.error('[ERROR] Failed to write file:', writeResult.error, 'File:', filePath, 'Block:', block);
             alert(`❌ Failed to write file: ${fileName}\nError: ${writeResult.error}`);
             setCodeBlockStates(prev => ({
               ...prev,
@@ -2683,7 +2694,7 @@ Remember: Use filename= format for any code files you create or modify.`
             }));
           }
         } else {
-          console.error('❌ Failed to create file:', result.error);
+          console.error('[ERROR] Failed to create file:', result.error);
 
           // Mark as failed
           setCodeBlockStates(prev => ({
@@ -2692,7 +2703,7 @@ Remember: Use filename= format for any code files you create or modify.`
           }));
         }
       } catch (error) {
-        console.error('❌ Error creating file:', error);
+        console.error('[ERROR] Error creating file:', error);
 
         // Mark as failed
         setCodeBlockStates(prev => ({
@@ -2702,17 +2713,17 @@ Remember: Use filename= format for any code files you create or modify.`
       }
     }
 
-    console.log('🎉 File creation complete. Created:', createdCount, 'files');
+    console.log('[OK] File creation complete. Created:', createdCount, 'files');
 
     // CRITICAL: Force final refresh after ALL files are created
     if (createdCount > 0 && onFileCreated) {
-      console.log('🔄 Final explorer refresh after creating', createdCount, 'files');
+      console.log('[INFO] Final explorer refresh after creating', createdCount, 'files');
       // Wait for filesystem to fully sync
       await new Promise(resolve => setTimeout(resolve, 500));
       // Trigger refresh for each created file to ensure all appear
       for (const fileName of createdFiles) {
         const filePath = `${workspaceFolderRef.current}/${fileName}`;
-        console.log('🔄 Refreshing explorer for:', fileName);
+        console.log('[INFO] Refreshing explorer for:', fileName);
         onFileCreated(filePath);
         await new Promise(resolve => setTimeout(resolve, 100));
       }
@@ -3085,6 +3096,7 @@ Remember: Use filename= format for any code files you create or modify.`
                         // Handle bold and inline code
                         const boldRegex = /\*\*(.+?)\*\*/g;
                         const inlineCodeRegex = /`([^`]+)`/g;
+                        const urlRegex = /(https?:\/\/[^\s<>]+)/g;
                         const parts = [];
                         let match;
 
@@ -3106,8 +3118,33 @@ Remember: Use filename= format for any code files you create or modify.`
                           tempParts.push(line.substring(tempIndex));
                         }
 
+                        // Then handle URLs in non-code parts
+                        const urlProcessedParts = [];
+                        tempParts.forEach((part) => {
+                          if (typeof part === 'object' && part.type === 'code') {
+                            urlProcessedParts.push(part);
+                          } else if (typeof part === 'string') {
+                            let urlIndex = 0;
+                            const urlMatches = [];
+                            const urlRegexLocal = /(https?:\/\/[^\s<>]+)/g;
+                            let urlMatch;
+                            while ((urlMatch = urlRegexLocal.exec(part)) !== null) {
+                              if (urlMatch.index > urlIndex) {
+                                urlProcessedParts.push(part.substring(urlIndex, urlMatch.index));
+                              }
+                              urlProcessedParts.push({ type: 'url', content: urlMatch[1] });
+                              urlIndex = urlMatch.index + urlMatch[0].length;
+                            }
+                            if (urlIndex < part.length) {
+                              urlProcessedParts.push(part.substring(urlIndex));
+                            } else if (urlIndex === 0) {
+                              urlProcessedParts.push(part);
+                            }
+                          }
+                        });
+
                         // Then handle bold
-                        tempParts.forEach((part, partIdx) => {
+                        urlProcessedParts.forEach((part, partIdx) => {
                           if (typeof part === 'object' && part.type === 'code') {
                             parts.push(<code key={`code-${j}-${partIdx}`} style={{
                               background: 'rgba(255,255,255,0.1)',
@@ -3116,6 +3153,22 @@ Remember: Use filename= format for any code files you create or modify.`
                               fontFamily: 'monospace',
                               fontSize: '0.9em'
                             }}>{part.content}</code>);
+                          } else if (typeof part === 'object' && part.type === 'url') {
+                            parts.push(<a 
+                              key={`url-${j}-${partIdx}`} 
+                              href={part.content}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                color: '#4a9eff',
+                                textDecoration: 'underline',
+                                cursor: 'pointer'
+                              }}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                window.electronAPI?.shell?.openExternal(part.content);
+                              }}
+                            >{part.content}</a>);
                           } else if (typeof part === 'string') {
                             let boldIndex = 0;
                             const boldMatches = [];
@@ -3178,6 +3231,15 @@ Remember: Use filename= format for any code files you create or modify.`
               </div>
             );
           })}
+        
+        {/* Copilot-style thinking indicator */}
+        {isLoading && !messages.some(msg => msg.isStreaming) && (
+          <div className="thinking-indicator">
+            <FiLoader className="spinning" size={16} />
+            <span className="thinking-text">Thinking...</span>
+          </div>
+        )}
+        
         <div ref={messagesEndRef} />
       </div>
       <form
@@ -3214,12 +3276,34 @@ Remember: Use filename= format for any code files you create or modify.`
           </div>
         )}
 
+        {/* Terminal activity indicator - Copilot style */}
+        {terminalActivity.isActive && !terminalActivity.isLongRunning && (
+          <div className="terminal-activity-indicator blocking">
+            <div className="terminal-activity-content">
+              <FiLoader className="spinning" size={14} />
+              <span>Terminal running...</span>
+            </div>
+            <span className="terminal-activity-hint">Please wait</span>
+          </div>
+        )}
+        
+        {/* Long-running process indicator (allows prompts) */}
+        {terminalActivity.isActive && terminalActivity.isLongRunning && (
+          <div className="terminal-activity-indicator long-running">
+            <div className="terminal-activity-content">
+              <span className="pulse-dot"></span>
+              <span>Dev server running</span>
+            </div>
+            <span className="terminal-activity-hint">You can continue prompting</span>
+          </div>
+        )}
+
         {/* Show stop button when loading or executing commands */}
         {(isLoading || isTerminalBusy || messages.some(msg => msg.isExecuting)) && (
           <div className="ai-working-indicator">
             <div className="working-status">
               <FiLoader className="spinning" size={14} />
-              <span>{isTerminalBusy ? 'Terminal is busy...' : 'AI is working...'}</span>
+              <span>{isTerminalBusy ? 'Executing...' : 'Working...'}</span>
             </div>
             <button
               type="button"
@@ -3244,7 +3328,9 @@ Remember: Use filename= format for any code files you create or modify.`
           <div className="ai-input-inner">
             <textarea
               className="ai-input"
-              placeholder="Describe what you want to build"
+              placeholder={terminalActivity.isActive && !terminalActivity.isLongRunning 
+                ? "Waiting for terminal command to complete..." 
+                : "Describe what you want to build"}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -3254,7 +3340,7 @@ Remember: Use filename= format for any code files you create or modify.`
                   handleSubmit(e);
                 }
               }}
-              disabled={isLoading || isTerminalBusy}
+              disabled={isLoading || isTerminalBusy || (terminalActivity.isActive && !terminalActivity.isLongRunning)}
               rows={3}
             />
             <div className="ai-input-actions">
@@ -3268,7 +3354,7 @@ Remember: Use filename= format for any code files you create or modify.`
                   type="button"
                   className={`voice-input-button ${isRecording ? 'recording' : ''}`}
                   onClick={isRecording ? stopVoiceInput : startVoiceInput}
-                  disabled={isLoading || isTerminalBusy}
+                  disabled={isLoading || isTerminalBusy || (terminalActivity.isActive && !terminalActivity.isLongRunning)}
                   title={isRecording ? "Stop recording" : "Voice input"}
                 >
                   <FiMic size={16} />
@@ -3278,8 +3364,14 @@ Remember: Use filename= format for any code files you create or modify.`
               <button
                 type="submit"
                 className="ai-send"
-                disabled={!input.trim() || isLoading || isTerminalBusy}
-                title={isLoading || isTerminalBusy ? "AI is working..." : "Send message"}
+                disabled={!input.trim() || isLoading || isTerminalBusy || (terminalActivity.isActive && !terminalActivity.isLongRunning)}
+                title={
+                  terminalActivity.isActive && !terminalActivity.isLongRunning 
+                    ? "Wait for terminal command to complete" 
+                    : isLoading || isTerminalBusy 
+                      ? "AI is working..." 
+                      : "Send message"
+                }
               >
                 {isLoading || isTerminalBusy ? (
                   <FiLoader className="spinning" size={18} />

@@ -13,7 +13,7 @@ function NodeWarning({ onDismiss }) {
   return (
     <div className="node-warning-overlay">
       <div className="node-warning-modal">
-        <div className="node-warning-icon">⚠️</div>
+        <div className="node-warning-icon">!</div>
         <h2>Node.js Not Found</h2>
         <p>
           ExternAI requires <strong>Node.js</strong> to run commands like <code>npm install</code>, 
@@ -30,12 +30,12 @@ function NodeWarning({ onDismiss }) {
         </div>
 
         <div className="node-warning-note">
-          <strong>💡 Tip:</strong> Choose the "LTS" (Long Term Support) version for best compatibility.
+          <strong>Tip:</strong> Choose the "LTS" (Long Term Support) version for best compatibility.
         </div>
 
         <div className="node-warning-actions">
           <button className="node-warning-download" onClick={handleDownload}>
-            📥 Download Node.js
+            Download Node.js
           </button>
           <button className="node-warning-dismiss" onClick={onDismiss}>
             Remind Me Later

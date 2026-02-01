@@ -30,11 +30,11 @@ function ProblemsPanel({ diagnostics = [] }) {
   const getSeverityIcon = (severity) => {
     switch (severity) {
       case 'error':
-        return '❌';
+        return 'E';
       case 'warning':
-        return '⚠️';
+        return 'W';
       case 'info':
-        return 'ℹ️';
+        return 'i';
       default:
         return '•';
     }
@@ -65,19 +65,19 @@ function ProblemsPanel({ diagnostics = [] }) {
             className={`stat-button error ${filterSeverity === 'error' ? 'active' : ''}`}
             onClick={() => setFilterSeverity('error')}
           >
-            ❌ {counts.error}
+            Errors: {counts.error}
           </button>
           <button
             className={`stat-button warning ${filterSeverity === 'warning' ? 'active' : ''}`}
             onClick={() => setFilterSeverity('warning')}
           >
-            ⚠️ {counts.warning}
+            Warnings: {counts.warning}
           </button>
           <button
             className={`stat-button info ${filterSeverity === 'info' ? 'active' : ''}`}
             onClick={() => setFilterSeverity('info')}
           >
-            ℹ️ {counts.info}
+            Info: {counts.info}
           </button>
         </div>
         <div className="problems-actions">
@@ -86,14 +86,14 @@ function ProblemsPanel({ diagnostics = [] }) {
             onClick={() => setGroupByFile(!groupByFile)}
             title="Group by File"
           >
-            📁
+            Group
           </button>
           <button
             className="icon-button"
             onClick={handleClear}
             title="Clear Problems"
           >
-            🗑
+            Clear
           </button>
         </div>
       </div>

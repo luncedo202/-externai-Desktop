@@ -1,11 +1,14 @@
 node_modules/
 dist/
 build/
+bundled-node/
 *.log
 .DS_Store
 .env
 .env.local
 .env*.local
+hosting/.env
+hosting/node_modules/
 
 # Sensitive - Never commit!
 .env

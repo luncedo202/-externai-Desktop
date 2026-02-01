@@ -57,3 +57,10 @@ exports.api = onRequest({
     region: "us-central1", // You can change this to your preferred region
     secrets: ["ANTHROPIC_API_KEY"] // Add secrets here
 }, app);
+
+// Import and export publish functions
+const { serveApp, publishApp, getMyApps, unpublishApp } = require('./publish');
+exports.serveApp = serveApp;
+exports.publishApp = publishApp;
+exports.getMyApps = getMyApps;
+exports.unpublishApp = unpublishApp;
