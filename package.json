@@ -78,22 +78,6 @@
             "output": "dist",
             "buildResources": "assets"
         },
-        "asar": true,
-        "asarUnpack": [
-            "node_modules/node-pty/**/*",
-            "node_modules/@electron/**/*"
-        ],
-        "npmRebuild": true,
-        "buildDependenciesFromSource": true,
-        "nodeGypRebuild": false,
-        "beforeBuild": "./scripts/prebuild-native.js",
-        "extraResources": [
-            {
-                "from": "bundled-node/${platform}-${arch}",
-                "to": "bundled-node/${platform}-${arch}",
-                "filter": ["**/*"]
-            }
-        ],
         "files": [
             "build/**/*",
             "src/main/**/*",
