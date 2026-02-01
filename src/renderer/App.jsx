@@ -12,6 +12,7 @@ import AnalyticsService from './services/AnalyticsService';
 import PublishService from './services/PublishService';
 import PricingPlans from './components/PricingPlans';
 import NodeWarning from './components/NodeWarning';
+import NodeWarningModal from './components/NodeWarningModal';
 import PublishedApps from './components/PublishedApps';
 import './App.css';
 
@@ -21,6 +22,8 @@ function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const [nodeStatus, setNodeStatus] = useState({ checked: false, installed: true, showWarning: false });
+  const [showNodeWarningModal, setShowNodeWarningModal] = useState(false);
+  const [nodeDownloadUrl, setNodeDownloadUrl] = useState('https://nodejs.org/en/download/');
   const [activeView, setActiveView] = useState('explorer');
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
@@ -120,27 +123,33 @@ function App() {
       return true; // Command doesn't need Node.js, allow it
     }
 
-    // Check if we've already verified Node.js is installed (bundled or system)
+    // Check if we've already verified Node.js is installed
     if (nodeStatus.checked && nodeStatus.installed) {
       return true; // Already verified, Node.js is available
     }
 
-    // Check if Node.js is available (bundled takes priority)
+    // Check if Node.js is available
     if (window.electronAPI?.system?.checkNode) {
       const result = await window.electronAPI.system.checkNode();
-      // With bundled Node.js, this should return true
-      // Only show warning if neither bundled nor system Node.js is available
-      const isAvailable = result.installed || result.bundled;
+      const isAvailable = result.installed;
+      
       setNodeStatus({ 
         checked: true, 
         installed: isAvailable, 
-        bundled: result.bundled,
-        showWarning: !isAvailable 
+        showWarning: false 
       });
+      
+      // Show modal if Node.js is not available
+      if (!isAvailable) {
+        const downloadUrl = result.downloadUrl || 'https://nodejs.org/en/download/';
+        setNodeDownloadUrl(downloadUrl);
+        setShowNodeWarningModal(true);
+      }
+      
       return isAvailable;
     }
 
-    // If we can't check, assume Node.js is available (bundled should be there)
+    // If we can't check, assume Node.js is available
     return true;
   };
 
@@ -815,6 +824,16 @@ function App() {
       )}
       {nodeStatus.showWarning && (
         <NodeWarning onDismiss={() => setNodeStatus(prev => ({ ...prev, showWarning: false }))} />
+      )}
+      {showNodeWarningModal && (
+        <NodeWarningModal
+          isOpen={showNodeWarningModal}
+          onClose={() => setShowNodeWarningModal(false)}
+          onDownload={() => {
+            window.electronAPI.shell.openExternal(nodeDownloadUrl);
+            setShowNodeWarningModal(false);
+          }}
+        />
       )}
     </div>
   );

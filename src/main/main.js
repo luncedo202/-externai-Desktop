@@ -1235,6 +1235,28 @@ ipcMain.handle('terminal:execute', async (event, { command, cwd }) => {
   return new Promise((resolve) => {
     const { exec } = require('child_process');
     
+    // Check if Node.js is installed before running commands that need it
+    const needsNode = /\b(node|npm|npx|yarn|pnpm)\b/.test(command);
+    if (needsNode) {
+      const nodeCheck = checkNodeInstalled();
+      if (!nodeCheck.installed) {
+        const downloadUrl = process.platform === 'darwin' 
+          ? 'https://nodejs.org/en/download/'
+          : process.platform === 'win32'
+          ? 'https://nodejs.org/en/download/'
+          : 'https://nodejs.org/en/download/package-manager/';
+        
+        resolve({
+          success: false,
+          error: 'Node.js is required',
+          needsNodeInstall: true,
+          message: `Node.js is not installed on your system.\n\nTo use terminal commands and npm packages, please install Node.js from:\n${downloadUrl}\n\nAfter installing, restart ExternAI.`,
+          downloadUrl
+        });
+        return;
+      }
+    }
+    
     // 25 minute timeout for all commands - covers installs, builds, migrations, etc.
     const timeout = 25 * 60 * 1000; // 25 minutes
     
