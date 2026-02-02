@@ -1215,11 +1215,37 @@
   pointer-events: none;
 }
 
+.drop-zone-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .drop-zone-overlay span {
   color: #3b82f6;
   font-size: 14px;
   font-weight: 500;
   font-style: italic;
+}
+
+.cancel-drag-btn {
+  pointer-events: all;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.9);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-drag-btn:hover {
+  background: rgba(220, 38, 38, 1);
+  transform: scale(1.1);
 }
 
 .attached-images {

@@ -14,10 +14,7 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
   useEffect(() => {
     if (devServerUrl) {
       setPreviewUrl(devServerUrl);
-      // Auto-show preview when dev server starts if not already shown
-      if (!showPreview) {
-        setShowPreview(true);
-      }
+      // Don't auto-show preview - user can click Show Preview manually
     }
   }, [devServerUrl]);
 
@@ -113,11 +110,11 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
   };
 
   const handlePreviewClick = () => {
-    if (!showPreview && onPreviewClick && !devServerUrl) {
-      // Trigger AI to run the dev server ONLY if it's not already running
+    // Only trigger AI to run the dev server - don't show preview in editor area
+    if (onPreviewClick && !devServerUrl) {
       onPreviewClick();
     }
-    setShowPreview(!showPreview);
+    // Preview will open in external browser, not in editor
   };
 
   // Determine Monaco theme based on app theme
@@ -242,24 +239,7 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
                 />
               )}
             </div>
-            {showPreview && (
-              <div className="live-preview-container" style={{ flex: 1, borderLeft: '1px solid var(--vscode-border)' }}>
-                <webview
-                  src={previewUrl}
-                  className="live-preview-iframe"
-                  style={{ width: '100%', height: '100%' }}
-                />
-              </div>
-            )}
           </>
-        ) : showPreview && !activeFile ? (
-          <div className="live-preview-container" style={{ flex: 1 }}>
-            <webview
-              src={previewUrl}
-              className="live-preview-iframe"
-              style={{ width: '100%', height: '100%' }}
-            />
-          </div>
         ) : (
           <div className="editor-welcome">
             <h1>ExternAI</h1>
@@ -267,12 +247,6 @@ function EditorArea({ openFiles, activeFile, onFileSelect, onFileClose, onConten
             <div className="welcome-actions">
               <div className="welcome-section primary-section">
                 <h3>Get Started</h3>
-                <button className="welcome-button primary" onClick={handleOpenFolder}>
-                  Open Folder
-                </button>
-                <button className="welcome-button" onClick={handleOpenFile}>
-                  Open File
-                </button>
               </div>
               
               <div className="welcome-section secondary-section">

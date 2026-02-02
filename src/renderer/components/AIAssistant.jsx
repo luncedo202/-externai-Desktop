@@ -1223,6 +1223,10 @@ It requires the backend server to communicate with Claude AI.`;
     }
   };
 
+  const handleCancelDrag = () => {
+    setIsDraggingOver(false);
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -3322,7 +3326,17 @@ Remember: Use filename= format for any code files you create or modify.`
           {/* Drop zone overlay - only show when dragging */}
           {isDraggingOver && (
             <div className="drop-zone-overlay">
-              <span>Drop image here...</span>
+              <div className="drop-zone-content">
+                <span>Drop image here...</span>
+                <button 
+                  type="button"
+                  className="cancel-drag-btn"
+                  onClick={handleCancelDrag}
+                  title="Cancel"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
             </div>
           )}
           <div className="ai-input-inner">
