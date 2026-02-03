@@ -412,7 +412,17 @@ ipcMain.handle('system:checkNode', async () => {
 
 // Open external URL (for Node.js download link)
 ipcMain.handle('system:openExternal', async (event, url) => {
-  await shell.openExternal(url);
+  // On macOS, use 'open' command to properly bring browser to foreground
+  if (process.platform === 'darwin') {
+    const { exec } = require('child_process');
+    exec(`open "${url}"`, (error) => {
+      if (error) {
+        console.error('Failed to open URL with open command:', error);
+      }
+    });
+  } else {
+    await shell.openExternal(url, { activate: true });
+  }
   return { success: true };
 });
 
@@ -1301,10 +1311,79 @@ ipcMain.handle('terminal:execute', async (event, { command, cwd }) => {
   });
 });
 
+// Simple command execution for SimpleTerminal component
+ipcMain.handle('terminal:runCommand', async (event, command, cwd) => {
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    
+    console.log(`[SimpleTerminal] Executing: ${command}`);
+    console.log(`[SimpleTerminal] Working directory: ${cwd}`);
+    
+    // Enhanced PATH for exec() to find Node.js/npm
+    const enhancedPath = [
+      '/opt/homebrew/bin',
+      '/usr/local/bin',
+      '/usr/bin',
+      '/bin',
+      '/usr/sbin',
+      '/sbin',
+      process.env.HOME + '/.nvm/versions/node/*/bin',
+      process.env.HOME + '/.nodenv/shims',
+      process.env.HOME + '/.fnm/aliases/default/bin',
+      process.env.HOME + '/.volta/bin',
+      process.env.PATH || ''
+    ].join(':');
+    
+    const execEnv = { 
+      ...process.env, 
+      PATH: enhancedPath,
+      FORCE_COLOR: '0', // Disable colors for cleaner output
+    };
+    
+    // 5 minute timeout
+    const timeout = 5 * 60 * 1000;
+    
+    exec(command, { 
+      cwd: cwd || process.env.HOME, 
+      timeout, 
+      maxBuffer: 10 * 1024 * 1024, 
+      env: execEnv,
+      shell: process.env.SHELL || '/bin/zsh'
+    }, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`[SimpleTerminal] Command failed: ${error.message}`);
+        resolve({
+          success: false,
+          error: error.message,
+          stderr: stderr,
+          stdout: stdout
+        });
+      } else {
+        console.log(`[SimpleTerminal] Command succeeded`);
+        resolve({
+          success: true,
+          stdout: stdout,
+          stderr: stderr
+        });
+      }
+    });
+  });
+});
+
 // Open external URL in default browser
 ipcMain.handle('shell:openExternal', async (event, url) => {
   try {
-    await shell.openExternal(url);
+    // On macOS, use 'open' command to properly bring browser to foreground
+    if (process.platform === 'darwin') {
+      const { exec } = require('child_process');
+      exec(`open "${url}"`, (error) => {
+        if (error) {
+          console.error('Failed to open URL with open command:', error);
+        }
+      });
+    } else {
+      await shell.openExternal(url, { activate: true });
+    }
     return { success: true };
   } catch (error) {
     console.error('Failed to open external URL:', error);

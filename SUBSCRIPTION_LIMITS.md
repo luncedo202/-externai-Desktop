@@ -2,19 +2,20 @@
 
 ## Overview
 
-ExternAI implements a freemium model where new users get **25 free AI prompts** before requiring a paid subscription. This document explains how the system works and how to manage it.
+ExternAI implements a freemium model where new users get **20 free AI prompts** initially. After using those, users receive **4 prompts daily** to continue using the AI assistant. For unlimited access, users can upgrade to a paid subscription. This document explains how the system works and how to manage it.
 
 ## How It Works
 
 ### Free Tier
-- **25 free prompts** per user
+- **20 initial free prompts** per new user
+- **4 daily prompts** after initial prompts are used
 - Tracked per Firebase user ID
-- Prompt count decrements with each AI request
-- Counter displayed in AI Assistant header
-- Graceful blocking when limit reached
+- Daily prompts reset every day at midnight (server time)
+- Prompt count displayed in AI Assistant header
+- Graceful blocking when daily limit reached
 
 ### Subscription Tiers
-1. **Free** - 25 prompts total, then requires upgrade
+1. **Free** - 20 prompts initially, then 4 per day
 2. **Pro** - Unlimited prompts (future implementation)
 3. **Premium** - Unlimited prompts + priority features (future)
 
@@ -30,7 +31,8 @@ ExternAI implements a freemium model where new users get **25 free AI prompts** 
     tier: 'free' | 'pro' | 'premium',
     status: 'active' | 'cancelled' | 'expired',
     startDate: Timestamp,
-    freePromptsRemaining: 25,
+    freePromptsRemaining: 20,      // Shows remaining prompts (initial or daily)
+    promptsMode: 'initial' | 'daily',  // Which mode user is in
     totalFreePromptsUsed: 0
   },
   usage: {
@@ -38,11 +40,15 @@ ExternAI implements a freemium model where new users get **25 free AI prompts** 
     tokensToday: 0,
     lastResetDate: '2025-12-12',
     totalRequests: 0,
-    totalTokens: 0
+    totalTokens: 0,
+    dailyPromptsRemaining: 0,      // Daily prompts available (0 until initial used)
+    hasUsedInitialPrompts: false   // Flag to track if user switched to daily mode
   },
   limits: {
     maxRequestsPerDay: 100,
-    maxTokensPerDay: 100000
+    maxTokensPerDay: 100000,
+    maxLifetimeRequests: 20,       // Initial free prompts
+    dailyPromptsAfterInitial: 4    // Daily prompts after initial are used
   }
 }
 ```
@@ -50,22 +56,42 @@ ExternAI implements a freemium model where new users get **25 free AI prompts** 
 **Prompt Checking:**
 1. User sends AI request
 2. Backend fetches user document from Firestore
-3. Check `subscription.tier` and `freePromptsRemaining`
-4. If free tier and prompts <= 0, return 402 Payment Required
-5. If allowed, process request and decrement counter
-6. Return response to client
+3. Check if user still has initial prompts (totalRequests < 20)
+4. If yes, allow request and increment totalRequests
+5. If initial prompts exhausted (totalRequests >= 20):
+   - Check dailyPromptsRemaining
+   - If dailyPromptsRemaining <= 0, return 403 Daily Limit
+   - If allowed, process request and decrement dailyPromptsRemaining
+6. Every new day, reset dailyPromptsRemaining to 4 for users who exhausted initial prompts
+7. Return response to client
 
-**API Response (402):**
+**API Response (403 - Initial Exhausted):**
 ```json
 {
   "error": "Free prompts exhausted",
-  "message": "You have used all 25 free prompts. Please subscribe to continue using AI features.",
+  "message": "You have used all 20 free prompts. You now get 4 prompts daily, or upgrade for unlimited access.",
   "subscription": {
     "tier": "free",
     "freePromptsRemaining": 0,
-    "totalFreePromptsUsed": 25
+    "promptsMode": "daily",
+    "totalFreePromptsUsed": 20
   },
-  "requiresPayment": true
+  "requiresPayment": false
+}
+```
+
+**API Response (403 - Daily Exhausted):**
+```json
+{
+  "error": "Daily prompts exhausted",
+  "message": "You have used all 4 daily prompts. Come back tomorrow for more, or upgrade for unlimited access.",
+  "subscription": {
+    "tier": "free",
+    "freePromptsRemaining": 0,
+    "promptsMode": "daily",
+    "dailyPromptsLimit": 4
+  },
+  "requiresPayment": false
 }
 ```
 

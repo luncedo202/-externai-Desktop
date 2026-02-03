@@ -65,6 +65,7 @@ function App() {
   });
   const terminalActivityTimeout = useRef(null);
   const aiAssistantRef = useRef(null);
+  const terminalRef = useRef(null);
 
   // Initialize analytics and check authentication on app start
   useEffect(() => {
@@ -784,6 +785,7 @@ function App() {
               theme={theme}
               onUpdateTerminalStatus={handleUpdateTerminalStatus}
               onTerminalOutput={handleTerminalOutput}
+              terminalRef={terminalRef}
             />
           )}
         </div>
@@ -805,6 +807,8 @@ function App() {
           terminalOutput={terminalOutputBuffer}
           terminalActivity={terminalActivity}
           checkNodeBeforeCommand={checkNodeBeforeCommand}
+          onUpgradeClick={() => setShowPricing(true)}
+          terminalRef={terminalRef}
         />
       </div>
       <StatusBar

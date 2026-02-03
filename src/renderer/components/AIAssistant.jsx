@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader, FiMic, FiVolume2, FiVolumeX } from 'react-icons/fi';
+import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader, FiMic, FiVolume2, FiVolumeX, FiZap, FiCpu, FiStar, FiArrowRight } from 'react-icons/fi';
 import ClaudeService from '../services/ClaudeService';
 import AnalyticsService from '../services/AnalyticsService';
 import ProjectStateService from '../services/ProjectStateService';
@@ -159,7 +159,9 @@ const AIAssistant = forwardRef(({
   devServerUrl,
   terminalOutput,
   terminalActivity = { isActive: false, isLongRunning: false, lastCommand: '' },
-  checkNodeBeforeCommand
+  checkNodeBeforeCommand,
+  onUpgradeClick,
+  terminalRef
 }, ref) => {
   // Load messages from localStorage if available, but reset if workspaceFolder changes
   const defaultWelcome = {
@@ -931,14 +933,17 @@ It requires the backend server to communicate with Claude AI.`;
       console.error('AI Error:', error);
 
       // Check if it's a payment required error
-      if (error.message.includes('Free prompts exhausted') || error.message.includes('402')) {
+      if (error.message.includes('Free prompts exhausted') || 
+          error.message.includes('Daily prompts exhausted') || 
+          error.message.includes('402')) {
         setError('subscription_required');
         // Combine filter and add in single setState call to avoid race conditions
         setMessages(prev => [
           ...prev.filter(msg => msg.id !== streamingMessageId),
           {
-            role: 'system',
-            content: `**Free Prompts Exhausted**\n\nYou've used all 25 free AI prompts. To continue using AI features, please subscribe to a paid plan.\n\n**Benefits of subscribing:**\n• Unlimited AI prompts\n• Priority support\n• Advanced features\n• Faster response times\n\n[Subscribe Now](#) to continue building amazing projects!`
+            role: 'credits-exhausted',
+            id: `credits-exhausted-${Date.now()}`,
+            content: 'CREDITS_EXHAUSTED_CARD'
           }
         ]);
 
@@ -1859,12 +1864,7 @@ Could you provide more details about what you'd like to build?`;
     const commands = extractCommands(messageContent);
     if (commands.length === 0) return;
 
-    // Request user confirmation before running
-    const confirmed = await requestCommandConfirmation(commands, isAutoFixCommand);
-    if (!confirmed) {
-      console.error('[ERROR] User cancelled command execution');
-      return;
-    }
+    console.log('💻 [EXEC] Auto-executing commands without confirmation:', commands);
 
     // Wait if terminal is already busy (prevents command collision)
     if (isTerminalBusy) {
@@ -1883,32 +1883,7 @@ Could you provide more details about what you'd like to build?`;
 
     setIsTerminalBusy(true);
     try {
-      // Get the first available terminal ID from the app
-      const terminalElements = document.querySelectorAll('.terminal-instance.active');
-      const terminalId = terminalElements.length > 0 ? terminalElements[0].getAttribute('data-id') : 'initial-terminal';
-      const backendId = terminalElements.length > 0 ? terminalElements[0].getAttribute('data-terminal-id') : null;
-
-      if (!backendId && !terminalId) {
-        console.warn('No terminal available to execute commands');
-        setMessages(prev => [
-          ...prev,
-          {
-            role: 'system',
-            content: '⚠️ No terminal available. Please open a terminal to execute commands.',
-            isError: true
-          }
-        ]);
-        return;
-      }
-
-      // Use backendId for writing to physical terminal, terminalId for UI status
-      const targetTerminalBackendId = backendId || terminalId;
-
-      // Always ensure the terminal is in the correct working directory
-      if (workspaceFolderRef.current) {
-        await window.electronAPI.terminalWrite(targetTerminalBackendId, `cd "${workspaceFolderRef.current.replace(/"/g, '\\"')}"\r`);
-      }
-
+      // Use the new simple terminal runCommand API
       for (let i = 0; i < commands.length; i++) {
         const command = commands[i];
         const commandId = Date.now() + Math.random();
@@ -1920,256 +1895,272 @@ Could you provide more details about what you'd like to build?`;
           if (!hasNode) {
             console.error('[ERROR] Node.js not found, aborting command execution');
             setMessages(prev => prev.filter(m => m.id !== statusMessageId));
-            break; // Stop executing commands if Node.js is missing
+            break;
           }
         }
 
-        const isInstallCommand = command.includes('npm install') || command.includes('npm i ') ||
-          command.includes('yarn install') || command.includes('pnpm install');
         const isRunCommand = command.includes('npm run') || command.includes('npm start') ||
-          command.includes('yarn dev') || command.includes('pnpm dev');
+          command.includes('yarn dev') || command.includes('pnpm dev') || 
+          command.includes('npm dev') || command.includes('vite') ||
+          command.includes('next dev') || command.includes('gatsby develop');
 
         setMessages(prev => [
           ...prev,
           {
             id: statusMessageId,
             role: 'system',
-            content: `Running ${command}`,
+            content: `Running: ${command}`,
             isWorking: true
           }
         ]);
 
         try {
-          // Capture terminal output BEFORE command (PTY-only approach)
-          const outputBeforeCommand = terminalOutputRef.current || '';
-          const outputLengthBefore = outputBeforeCommand.length;
-          
-          // Write the command to the terminal
-          await window.electronAPI.terminalWrite(targetTerminalBackendId, command + '\r');
-
-          // Real-time tracking: poll until we detect command completion
-          const maxWaitTime = 1200000; // 20 min absolute max (safety net)
-          const checkInterval = 300; // Check every 300ms
-          const stableThreshold = 1500; // Output must be stable for 1.5s
-          
-          // Completion patterns for different command types
-          const completionPatterns = [
-            // npm
-            /added \d+ packages?/i,
-            /up to date/i,
-            /npm warn/i,  // warnings mean it finished
-            /npm err!/i,  // errors mean it finished (with error)
-            // yarn
-            /done in \d+/i,
-            /success /i,
-            // pnpm
-            /packages are ready/i,
-            // General
-            /\$ $/, // Back to prompt
-            /completed/i,
-            /finished/i,
-            /built /i,
-            /compiled/i,
-            /error:/i,
-            /failed/i,
-            /command not found/i,
-          ];
-          
-          let lastOutputLength = outputLengthBefore;
-          let stableTime = 0;
-          let totalWaitTime = 0;
-          
-          while (totalWaitTime < maxWaitTime) {
-            await new Promise(resolve => setTimeout(resolve, checkInterval));
-            totalWaitTime += checkInterval;
+          // Execute command in the visible terminal if available
+          if (terminalRef?.current?.executeCommand) {
+            terminalRef.current.executeCommand(command);
             
-            const currentOutput = terminalOutputRef.current || '';
-            const currentLength = currentOutput.length;
-            const newOutput = currentOutput.slice(outputLengthBefore);
-            
-            // Check for completion patterns in the new output
-            const foundCompletion = completionPatterns.some(pattern => pattern.test(newOutput));
-            if (foundCompletion && !isRunCommand) {
-              // Wait a tiny bit more to capture any trailing output
-              await new Promise(resolve => setTimeout(resolve, 500));
-              debug(`✅ Command completed (pattern matched) after ${totalWaitTime}ms`);
-              break;
-            }
-            
-            if (currentLength === lastOutputLength) {
-              stableTime += checkInterval;
-              if (stableTime >= stableThreshold) {
-                debug(`✅ Command finished after ${totalWaitTime}ms (output stable)`);
-                break;
-              }
-            } else {
-              stableTime = 0;
-              lastOutputLength = currentLength;
-            }
-            
-            // For run commands (servers), exit after detecting URL or 5s
+            // For long-running commands, don't wait - just update status immediately
             if (isRunCommand) {
-              const urlMatch = newOutput.match(/https?:\/\/localhost:\d+|http:\/\/127\.0\.0\.1:\d+/);
-              if (urlMatch || totalWaitTime >= 5000) {
-                debug('🚀 Run command - server detected or timeout');
-                break;
+              // Wait a bit longer for dev server to output URL
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              
+              console.log('🔍 Checking for dev server URL in terminal output...');
+              console.log('Terminal output available:', !!terminalOutput);
+              
+              // Try to get initial output from IPC to detect URL
+              try {
+                const result = await window.electronAPI.terminal.runCommand(`echo "checking..."`, workspaceFolderRef.current);
+                // The above is just to trigger any buffered output, actual detection happens via terminalOutput prop
+              } catch (err) {
+                console.log('Could not check terminal output:', err);
               }
+              
+              // Try to detect URL from recent terminal output
+              if (terminalOutput) {
+                console.log('Terminal output:', terminalOutput.slice(-500)); // Last 500 chars
+                
+                const urlPatterns = [
+                  /(?:Local|➜\s+Local|Network):\s+(https?:\/\/[^\s]+)/i,
+                  /(?:running on|listening on|server running at|Application started at):\s+(https?:\/\/[^\s]+)/i,
+                  /https?:\/\/localhost:\d+/i,
+                  /http:\/\/127\.0\.0\.1:\d+/i
+                ];
+
+                let detectedUrl = null;
+                for (const pattern of urlPatterns) {
+                  const match = terminalOutput.match(pattern);
+                  if (match) {
+                    detectedUrl = (match[1] || match[0]).replace(/\x1b\[[0-9;]*m/g, '').trim();
+                    console.log('✅ URL detected with pattern:', pattern, '→', detectedUrl);
+                    break;
+                  }
+                }
+
+                if (detectedUrl) {
+                  console.log('🔗 Dev server URL detected:', detectedUrl);
+                  
+                  if (onDevServerDetected) {
+                    onDevServerDetected(detectedUrl);
+                  }
+                  
+                  // Automatically open the browser immediately (no delay)
+                  console.log('🌐 Opening browser with URL:', detectedUrl);
+                  try {
+                    await window.electronAPI.shell.openExternal(detectedUrl);
+                    console.log('✅ Browser opened successfully');
+                  } catch (err) {
+                    console.error('❌ Failed to open browser:', err);
+                  }
+                  
+                  // Update status with clickable URL
+                  setMessages(prev => prev.map(msg =>
+                    msg.id === statusMessageId
+                      ? { 
+                          ...msg, 
+                          isWorking: false,
+                          role: 'dev-server-running',
+                          devServerUrl: detectedUrl,
+                          content: `DEV_SERVER_RUNNING`
+                        }
+                      : msg
+                  ));
+                } else {
+                  console.log('❌ No URL detected in terminal output');
+                  
+                  // Update status without URL - still show dev server card
+                  setMessages(prev => prev.map(msg =>
+                    msg.id === statusMessageId
+                      ? { 
+                          ...msg, 
+                          isWorking: false,
+                          role: 'dev-server-running',
+                          devServerUrl: 'http://localhost:3000',
+                          content: `DEV_SERVER_RUNNING`
+                        }
+                      : msg
+                  ));
+                }
+              } else {
+                console.log('❌ No terminal output available');
+                
+                // Update status without URL - still show dev server card
+                setMessages(prev => prev.map(msg =>
+                  msg.id === statusMessageId
+                    ? { 
+                        ...msg, 
+                        isWorking: false,
+                        role: 'dev-server-running',
+                        devServerUrl: 'http://localhost:3000',
+                        content: `DEV_SERVER_RUNNING`
+                      }
+                    : msg
+                ));
+              }
+              
+              AnalyticsService.trackCommand(command, true, 3000);
+              
+              if (onUpdateTerminalStatus) {
+                onUpdateTerminalStatus('terminal-1', 'success');
+              }
+              
+              // Don't continue to next command - long running processes block
+              break; // Stop executing further commands
             }
+            
+            // For normal commands, wait a bit for terminal to show
+            await new Promise(resolve => setTimeout(resolve, 300));
           }
           
-          if (totalWaitTime >= maxWaitTime) {
-            debug(`⏱️ Command timed out after ${maxWaitTime}ms`);
-          }
-
-          // Capture output AFTER command from PTY
-          const outputAfterCommand = terminalOutputRef.current || '';
-          const commandOutput = outputAfterCommand.slice(outputLengthBefore).trim();
+          // Execute command using the new runCommand API to get results
+          const result = await window.electronAPI.terminal.runCommand(command, workspaceFolderRef.current);
           
-          debug('📟 PTY Output captured:', commandOutput.substring(0, 500));
+          const commandOutput = (result.stdout || '') + (result.stderr || '');
+          const lowerOutput = commandOutput.toLowerCase();
+          
+          // Better error detection - avoid false positives
+          const hasActualError = !result.success || 
+            (result.stderr && result.stderr.trim().length > 0 && (
+              lowerOutput.includes('error:') ||
+              lowerOutput.includes('error ') ||
+              lowerOutput.includes('failed') ||
+              lowerOutput.includes('command not found') ||
+              lowerOutput.includes('npm err!') ||
+              lowerOutput.includes('cannot find module') ||
+              lowerOutput.includes('syntaxerror') ||
+              lowerOutput.includes('typeerror') ||
+              lowerOutput.includes('referenceerror') ||
+              lowerOutput.includes('enoent') ||
+              lowerOutput.includes('permission denied')
+            ));
+          
+          const hasError = hasActualError;
 
-          // Build result from PTY output (no separate terminalExecute)
-          let result = { 
-            success: true, 
-            stdout: commandOutput, 
-            stderr: '' 
-          };
-
-          // Update status to completed
+          // Update status message
           setMessages(prev => prev.map(msg =>
             msg.id === statusMessageId
-              ? { ...msg, isWorking: false, isExecuting: false }
+              ? { 
+                  ...msg, 
+                  isWorking: false,
+                  content: hasError 
+                    ? `❌ ${command}\n\`\`\`\n${commandOutput.slice(0, 500)}\n\`\`\``
+                    : `✅ ${command}` + (commandOutput.trim() ? `\n\`\`\`\n${commandOutput.slice(0, 300)}\n\`\`\`` : '')
+                }
               : msg
           ));
 
           const executionTime = Date.now() - commandId;
-          const errorText = commandOutput.toLowerCase();
-          const hasError = 
-            errorText.includes('error') ||
-            errorText.includes('failed') ||
-            errorText.includes('cannot find') ||
-            errorText.includes('not found') ||
-            errorText.includes('command not found') ||
-            errorText.includes('npm err!') ||
-            errorText.includes('enoent') ||
-            errorText.includes('no such file') ||
-            errorText.includes('permission denied') ||
-            errorText.includes('fatal:') ||
-            errorText.includes('exception');
-
           AnalyticsService.trackCommand(command, !hasError, executionTime);
 
-          // Update terminal status dot
+          // Update terminal status
           if (onUpdateTerminalStatus) {
-            onUpdateTerminalStatus(terminalId, hasError ? 'error' : 'success');
+            onUpdateTerminalStatus('terminal-1', hasError ? 'error' : 'success');
           }
 
           // Auto-detection of dev server URL
-          if (!hasError && (isRunCommand || commandOutput)) {
+          if (!hasError && isRunCommand && commandOutput) {
             const urlPatterns = [
-              /(?:Local|➜\s+Local|Network|➜\s+Network):\s+(https?:\/\/[^\s]+)/i,
-              /(?:running on|listening on|server running at|Application started at):\s+(https?:\/\/[^\s]+)/i,
+              /(?:Local|➜\s+Local|Network):\s+(https?:\/\/[^\s]+)/i,
+              /(?:running on|listening on|server running at):\s+(https?:\/\/[^\s]+)/i,
               /https?:\/\/localhost:\d+/i,
-              /http:\/\/127\.0\.0\.1:\d+/i,
-              /https?:\/\/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:\d+/i
+              /http:\/\/127\.0\.0\.1:\d+/i
             ];
 
             let detectedUrl = null;
-            const output = commandOutput;
-
             for (const pattern of urlPatterns) {
-              const match = output.match(pattern);
+              const match = commandOutput.match(pattern);
               if (match) {
-                detectedUrl = (match[1] || match[0]);
+                detectedUrl = (match[1] || match[0]).replace(/\x1b\[[0-9;]*m/g, '').trim();
                 break;
               }
             }
 
-            if (detectedUrl) {
-              detectedUrl = detectedUrl.replace(/\x1b\[[0-9;]*m/g, '').trim();
-              console.log('� Auto-detection for preview:', detectedUrl);
-
-              if (onDevServerDetected) {
-                onDevServerDetected(detectedUrl);
-              }
-
-              setTimeout(async () => {
-                try {
-                  await window.electronAPI.shell.openExternal(detectedUrl);
-                  setMessages(prev => [
-                    ...prev,
-                    {
-                      id: Date.now(),
-                      role: 'system',
-                      content: `Server running at ${detectedUrl}`,
-                    }
-                  ]);
-                } catch (err) {
-                  console.error('Failed to open browser:', err);
-                }
-              }, 2000);
+            if (detectedUrl && onDevServerDetected) {
+              onDevServerDetected(detectedUrl);
             }
           }
 
-          // Auto-fix logic if command failed
+          // Auto-fix if command failed
           if (hasError) {
             debug('❌ Command failed, attempting auto-fix...');
-            debug('📋 Error output from PTY:', commandOutput.substring(0, 1000));
             
             const errorOutput = commandOutput || 'Command failed with unknown error';
             
             // Analyze the error to provide better context to user
             const errorAnalysis = analyzeError(errorOutput, command);
             
-            // Show detailed error analysis to user
+            // Show detailed error analysis to user with auto-fix indicator
             setMessages(prev => [...prev, {
               id: `error-analysis-${Date.now()}`,
               role: 'system',
-              content: `Command failed: ${command}\n\n` +
-                `${errorAnalysis.type}: ${errorAnalysis.issue}` +
-                (errorAnalysis.file ? `\n\nFile: ${errorAnalysis.file}` : '') +
+              content: `**Error Detected - Auto-fixing...**\n\n` +
+                `**${errorAnalysis.type}:** ${errorAnalysis.issue}` +
+                (errorAnalysis.file ? `\n**File:** ${errorAnalysis.file}` : '') +
                 (errorAnalysis.line ? ` (line ${errorAnalysis.line})` : '')
             }]);
             
             // Build better context for auto-fix
             const errorContext = [
-              ...conversationHistory.current.slice(-6), // Last 6 messages for more context
+              ...conversationHistory.current.slice(-4),
               {
                 role: 'user',
-                content: `🚨 **COMMAND FAILED - AUTO-FIX NEEDED**
+                content: `🚨 **AUTO-FIX REQUEST**
 
 **Failed Command:**
 \`\`\`bash
 ${command}
 \`\`\`
 
+**Error Type:** ${errorAnalysis.type}
+**Issue:** ${errorAnalysis.issue}
+${errorAnalysis.file ? `**File:** ${errorAnalysis.file}${errorAnalysis.line ? ` (line ${errorAnalysis.line})` : ''}` : ''}
+
+**Full Error Output:**
+\`\`\`
+${errorOutput.slice(0, 1000)}
+\`\`\`
+
 **Working Directory:** ${workspaceFolderRef.current || 'Unknown'}
 
-**Error Output (from terminal):**
-\`\`\`
-${errorOutput}
-\`\`\`
+**FIX INSTRUCTIONS:**
+1. Analyze the error output carefully
+2. Provide the EXACT fix needed (not general advice)
+3. If installing a package, give the exact command: \`npm install <package>\`
+4. If fixing code, use filename= format to specify the file
+5. Be concise and actionable
 
-**Instructions:**
-1. Analyze the error carefully
-2. Identify the root cause (missing dependency, wrong path, syntax error, etc.)
-3. Provide a SPECIFIC fix - not generic advice
-4. If it's a missing package, provide the exact install command
-5. If it's a code error, provide the corrected code with filename= format
-6. If multiple steps are needed, provide them in order
-
-Remember: Use filename= format for any code files you create or modify.`
+Provide the fix now.`
               }
             ];
             
             try {
-              // Show auto-fix status
+              // Show auto-fix status with clear indicator
               const fixStatusId = `fix-${Date.now()}`;
               setMessages(prev => [
                 ...prev,
                 {
                   id: fixStatusId,
                   role: 'system',
-                  content: 'Generating fix...',
+                  content: '🔧 **Auto-Fix in Progress**\n\nAnalyzing error and generating fix...',
                   isWorking: true
                 }
               ]);
@@ -2194,38 +2185,51 @@ Remember: Use filename= format for any code files you create or modify.`
                 setMessages(prev => [...prev, fixMessage]);
                 conversationHistory.current.push(fixMessage);
                 
-                // Process the fix (create files and run commands)
-                // Wait for current command batch to finish before running fix commands
-                const runFix = async () => {
+                // Process the fix immediately
+                const processFix = async () => {
                   try {
                     const fixCommands = extractCommands(fixResponse.message);
                     const fixCodeBlocks = extractCodeBlocks(fixResponse.message);
                     
+                    // Create files first
                     if (fixCodeBlocks.length > 0) {
                       await handleCreateFilesAutomatically(fixResponse.message, fixMessage.id);
                     }
                     
-                    // Only run fix commands if terminal is not busy
-                    if (fixCommands.length > 0 && !isTerminalBusy) {
-                      await executeCommandsAutomatically(fixResponse.message, true);
-                    } else if (fixCommands.length > 0) {
-                      // Queue message to show user the commands to run
+                    // Then run fix commands
+                    if (fixCommands.length > 0) {
+                      // Show what we're doing
                       setMessages(prev => [...prev, {
-                        id: Date.now(),
+                        id: `fix-running-${Date.now()}`,
                         role: 'system',
-                        content: `⏸️ **Commands queued** - Terminal is busy. Run these commands when ready:\n\n${fixCommands.map(c => '```bash\n' + c + '\n```').join('\n')}`
+                        content: `**Applying fix:** Running ${fixCommands.length} command(s)...`
                       }]);
+                      
+                      await executeCommandsAutomatically(fixResponse.message, true);
                     }
                   } catch (err) {
                     console.error('Error processing auto-fix:', err);
+                    setMessages(prev => [...prev, {
+                      id: `fix-error-${Date.now()}`,
+                      role: 'system',
+                      content: `**Auto-fix failed:** ${err.message}. You may need to run the fix manually.`
+                    }]);
                   }
                 };
                 
-                // Wait a bit longer to ensure command batch completes
-                setTimeout(runFix, 2000);
+                // Process fix after a short delay to ensure UI updates
+                setTimeout(processFix, 500);
               }
             } catch (fixError) {
               console.error('Auto-fix failed:', fixError);
+              
+              // Show user-friendly error message
+              setMessages(prev => [...prev, {
+                id: `fix-failed-${Date.now()}`,
+                role: 'system',
+                content: `**Auto-fix could not be generated**\n\n${fixError.message || 'Unknown error'}\n\nYou can try again or fix the error manually based on the output above.`
+              }]);
+              
               // Store context for manual retry
               setRetryContext({
                 command,
@@ -2870,9 +2874,32 @@ Remember: Use filename= format for any code files you create or modify.`
           <h3>AI Assistant</h3>
           {subscription && subscription.tier === 'free' && (
             <div className="subscription-status">
-              <span className="prompts-remaining">
-                {subscription.freePromptsRemaining || 0} free prompts left
-              </span>
+              <div className="prompts-card">
+                <div className="prompts-header">
+                  <div className="prompts-info">
+                    <span className="prompts-count">{subscription.freePromptsRemaining || 0}</span>
+                    <span className="prompts-label">
+                      {subscription.promptsMode === 'daily' ? 'Daily' : 'Free'} Prompts
+                    </span>
+                  </div>
+                </div>
+                {subscription.promptsMode === 'daily' && (
+                  <div className="prompts-progress">
+                    <div 
+                      className="prompts-progress-bar" 
+                      style={{ width: `${(subscription.freePromptsRemaining / (subscription.dailyPromptsLimit || 4)) * 100}%` }}
+                    />
+                  </div>
+                )}
+                {subscription.promptsMode === 'initial' && (
+                  <div className="prompts-progress">
+                    <div 
+                      className="prompts-progress-bar initial" 
+                      style={{ width: `${(subscription.freePromptsRemaining / (subscription.maxFreePrompts || 20)) * 100}%` }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {voiceSupported && availableVoices.length > 0 && (
@@ -2954,6 +2981,51 @@ Remember: Use filename= format for any code files you create or modify.`
       
       <div className="ai-messages" ref={messagesContainerRef}>
         {messages.map((msg, idx) => {
+            // Special handling for dev server running card
+            if (msg.role === 'dev-server-running') {
+              const serverUrl = msg.devServerUrl || 'http://localhost:3000';
+              return (
+                <div key={msg.id || `devserver-${idx}`} className="dev-server-card">
+                  <div className="dev-server-icon">🎉</div>
+                  <div className="dev-server-content">
+                    <h3>Your App is Live!</h3>
+                    <p>Your application is now running and ready to view.</p>
+                    <div className="dev-server-url">{serverUrl}</div>
+                    <button 
+                      className="dev-server-open-btn"
+                      onClick={() => window.electronAPI.shell.openExternal(serverUrl)}
+                    >
+                      Open in Browser →
+                    </button>
+                    <p className="dev-server-tip">
+                      💡 Tip: Your browser should have opened automatically. If not, click the button above.
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            
+            // Special handling for credits exhausted card
+            if (msg.role === 'credits-exhausted') {
+              const isDailyLimit = subscription?.promptsMode === 'daily';
+              return (
+                <div key={msg.id || `credits-${idx}`} className="credits-exhausted-message" onClick={onUpgradeClick}>
+                  <div className="credits-message-content">
+                    <FiAlertCircle size={20} />
+                    <div>
+                      <strong>{isDailyLimit ? 'Daily Prompts Exhausted' : 'Credits Exhausted'}</strong>
+                      <p>
+                        {isDailyLimit 
+                          ? "You've used all 4 daily prompts. Come back tomorrow for more, or" 
+                          : "You've used all your free prompts. You'll get 4 free prompts daily starting tomorrow, or"}
+                        {' '}<span className="upgrade-link">Upgrade for unlimited access</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
             const codeBlocks = extractCodeBlocks(msg.content);
             const hasCode = codeBlocks.length > 0;
 
@@ -3293,12 +3365,26 @@ Remember: Use filename= format for any code files you create or modify.`
         
         {/* Long-running process indicator (allows prompts) */}
         {terminalActivity.isActive && terminalActivity.isLongRunning && (
-          <div className="terminal-activity-indicator long-running">
+          <div 
+            className={`terminal-activity-indicator long-running ${devServerUrl ? 'clickable' : ''}`}
+            onClick={() => {
+              if (devServerUrl) {
+                window.electronAPI.shell.openExternal(devServerUrl);
+              }
+            }}
+            style={{ cursor: devServerUrl ? 'pointer' : 'default' }}
+          >
             <div className="terminal-activity-content">
               <span className="pulse-dot"></span>
               <span>Dev server running</span>
             </div>
-            <span className="terminal-activity-hint">You can continue prompting</span>
+            {devServerUrl ? (
+              <span className="terminal-activity-hint dev-server-link">
+                Open: {devServerUrl}
+              </span>
+            ) : (
+              <span className="terminal-activity-hint">Check terminal for URL</span>
+            )}
           </div>
         )}
 

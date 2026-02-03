@@ -128,7 +128,7 @@ const PricingPlans = ({ onClose, userEmail }) => {
                             <div className="price">
                                 <span className="currency">$</span>
                                 <span className="amount">{plan.price}</span>
-                                <span className="period">/one-time</span>
+                                <span className="period">/month</span>
                             </div>
 
                             <ul className="features">

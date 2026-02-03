@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     kill: (terminalId) => ipcRenderer.invoke('terminal:kill', terminalId),
     signal: (terminalId, signal) => ipcRenderer.invoke('terminal:signal', terminalId, signal),
     getOutput: (terminalId) => ipcRenderer.invoke('terminal:getOutput', terminalId),
+    runCommand: (command, cwd) => ipcRenderer.invoke('terminal:runCommand', command, cwd),
     onData: (callback) => ipcRenderer.on('terminal:data', (event, terminalId, data) => callback(terminalId, data)),
     onExit: (callback) => ipcRenderer.on('terminal:exit', (event, terminalId) => callback(terminalId)),
   },
