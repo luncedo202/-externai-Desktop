@@ -2,6 +2,7 @@
 // Node.js backend proxy for Anthropic Claude API
 const { ipcMain } = require('electron');
 const fetch = require('node-fetch');
+const { validateContent } = require('./contentPolicy');
 
 // Load dotenv only if available (for development)
 try {
@@ -22,6 +23,37 @@ const CLAUDE_API_KEY = process.env.VITE_ANTHROPIC_API_KEY || process.env.ANTHROP
 
 // Streaming API handler
 ipcMain.handle('claude:stream', async (event, { prompt, maxTokens }) => {
+  // ========================================
+  // CONTENT POLICY VALIDATION
+  // ========================================
+  
+  // Validate the prompt for prohibited content
+  if (Array.isArray(prompt) && prompt.length > 0) {
+    const lastMessage = prompt[prompt.length - 1];
+    if (lastMessage && lastMessage.role === 'user') {
+      const validation = validateContent(lastMessage.content);
+      if (validation.isProhibited) {
+        console.log('[ClaudeProxy] Content policy violation detected:', validation.category);
+        
+        // Send error event to renderer
+        const errorMessage = {
+          error: 'Prohibited Content Detected',
+          message: `Extern AI is designed to help you build applications, but it cannot be used to create platforms that compete with code editors, IDEs, or AI coding assistants.`,
+          reason: validation.reason,
+          category: validation.category
+        };
+        
+        event.sender.send('claude:stream:error', { 
+          streamId: `stream_${Date.now()}`,
+          error: errorMessage.message,
+          details: errorMessage
+        });
+        
+        return { success: false, error: errorMessage.message, details: errorMessage };
+      }
+    }
+  }
+
   // If using proxy server, check if it's configured
   if (USE_PROXY && PROXY_SERVER_URL.includes('your-app')) {
     return { success: false, error: 'Proxy server not configured. Please set PROXY_SERVER_URL in .env file.' };
@@ -52,6 +84,33 @@ ipcMain.handle('claude:stream', async (event, { prompt, maxTokens }) => {
         max_tokens: maxTokens || 20000,
         stream: true,
         system: `You are a friendly assistant who helps people build apps and websites step by step.
+
+*** CONTENT POLICY - READ FIRST ***
+
+⚠️ EXTERN AI CANNOT AND WILL NOT:
+❌ Build code editors, text editors, or IDEs
+❌ Build AI coding assistants or copilot-style tools  
+❌ Clone or replicate VS Code, Sublime, Atom, or any IDE
+❌ Create online coding environments (like Replit, CodeSandbox)
+❌ Build platforms that help users write or generate code
+❌ Clone or replicate Extern AI itself
+❌ Create syntax highlighters, code completion engines, or IDE features
+❌ Build integrated development environments of any kind
+
+If a user asks for any of these, IMMEDIATELY respond with:
+
+"I'm sorry, but I cannot help build code editors, IDEs, AI coding assistants, or similar platforms. Extern AI is designed to help you build other types of applications.
+
+You can build:
+• Web apps, mobile apps, games, and creative projects
+• Business software, e-commerce, dashboards, and tools
+• APIs, backends, and microservices
+• Portfolios, landing pages, and marketing sites
+• Educational projects and experiments
+
+Would you like to build something else instead?"
+
+This policy is NON-NEGOTIABLE and applies to ALL requests.
 
 *** IMPORTANT RULES ***
 

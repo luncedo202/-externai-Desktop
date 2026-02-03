@@ -932,8 +932,46 @@ It requires the backend server to communicate with Claude AI.`;
     } catch (error) {
       console.error('AI Error:', error);
 
+      // Check if it's a content policy violation
+      if (error.message && (error.message.includes('Prohibited Content') || 
+          error.message.includes('cannot be used to create platforms') ||
+          error.message.includes('code editors') || 
+          error.message.includes('IDEs'))) {
+        setError('content_policy_violation');
+        // Combine filter and add in single setState call to avoid race conditions
+        setMessages(prev => [
+          ...prev.filter(msg => msg.id !== streamingMessageId),
+          {
+            role: 'content-policy-error',
+            id: `content-policy-${Date.now()}`,
+            content: 'CONTENT_POLICY_ERROR',
+            errorDetails: error.details || {
+              message: error.message,
+              whatYouCanDo: [
+                'Build web applications, mobile apps, games, and tools',
+                'Create business software, e-commerce platforms, dashboards',
+                'Develop APIs, microservices, and backend systems',
+                'Build creative projects, portfolios, and landing pages',
+                'Learn programming concepts and experiment with code'
+              ],
+              prohibited: [
+                'Code editors or IDEs (like VS Code, Sublime, Atom)',
+                'AI coding assistants or copilot-style tools',
+                'Online development environments (like Replit, CodeSandbox)',
+                'Platforms that help users write or generate code',
+                'Applications that replicate Extern AI or similar tools'
+              ]
+            }
+          }
+        ]);
+
+        // Track content policy violation
+        AnalyticsService.trackAIRequest('content_policy_violation', {
+          message: error.message
+        });
+      }
       // Check if it's a payment required error
-      if (error.message.includes('Free prompts exhausted') || 
+      else if (error.message.includes('Free prompts exhausted') || 
           error.message.includes('Daily prompts exhausted') || 
           error.message.includes('402')) {
         setError('subscription_required');
@@ -3021,6 +3059,57 @@ Provide the fix now.`
                         {' '}<span className="upgrade-link">Upgrade for unlimited access</span>
                       </p>
                     </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Special handling for content policy violation
+            if (msg.role === 'content-policy-error') {
+              return (
+                <div key={msg.id || `policy-${idx}`} className="content-policy-message">
+                  <div className="policy-header">
+                    <FiAlertCircle size={24} className="policy-icon" />
+                    <h3>Content Policy Restriction</h3>
+                  </div>
+                  <div className="policy-content">
+                    <p className="policy-main-message">
+                      {msg.errorDetails?.message || 'Extern AI cannot be used to build code editors, IDEs, AI coding assistants, or similar platforms.'}
+                    </p>
+                    
+                    <div className="policy-section">
+                      <h4>✅ What You Can Build:</h4>
+                      <ul>
+                        {(msg.errorDetails?.whatYouCanDo || [
+                          'Web applications, mobile apps, games, and tools',
+                          'Business software, e-commerce platforms, dashboards',
+                          'APIs, microservices, and backend systems',
+                          'Creative projects, portfolios, and landing pages',
+                          'Educational projects and experiments'
+                        ]).map((item, i) => (
+                          <li key={i}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="policy-section prohibited">
+                      <h4>❌ Prohibited Projects:</h4>
+                      <ul>
+                        {(msg.errorDetails?.prohibited || [
+                          'Code editors or IDEs (like VS Code, Sublime, Atom)',
+                          'AI coding assistants or copilot-style tools',
+                          'Online development environments (like Replit, CodeSandbox)',
+                          'Platforms that help users write or generate code',
+                          'Applications that replicate Extern AI'
+                        ]).map((item, i) => (
+                          <li key={i}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <p className="policy-footer">
+                      Would you like to build something else instead? I'm here to help with any other type of project!
+                    </p>
                   </div>
                 </div>
               );

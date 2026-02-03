@@ -4,6 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const admin = require('firebase-admin');
 const { authenticateToken } = require('../middleware/auth');
 const database = require('../models/database');
+const { validateContent, validateConversationHistory, getProhibitedContentMessage } = require('../middleware/contentPolicy');
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -178,8 +179,66 @@ router.post('/stream', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid messages format' });
     }
 
+    // ========================================
+    // CONTENT POLICY VALIDATION
+    // ========================================
+    
+    // Validate the current message
+    const currentUserMessage = messages[messages.length - 1];
+    if (currentUserMessage && currentUserMessage.role === 'user') {
+      const validation = validateContent(currentUserMessage.content);
+      if (validation.isProhibited) {
+        console.log(`[Content Policy] Blocked request from user ${userId}:`, {
+          category: validation.category,
+          reason: validation.reason
+        });
+
+        return res.status(403).json(getProhibitedContentMessage(validation.category));
+      }
+    }
+
+    // Validate conversation history for contextual patterns
+    const historyValidation = validateConversationHistory(messages);
+    if (historyValidation.isProhibited) {
+      console.log(`[Content Policy] Blocked conversation context from user ${userId}:`, {
+        category: historyValidation.category,
+        reason: historyValidation.reason
+      });
+
+      return res.status(403).json(getProhibitedContentMessage(historyValidation.category));
+    }
+
     // Optimized System Prompt - AI as Software Developer
     let defaultSystemPrompt = `You are a software developer. Execute instructions immediately. No confirmations needed.
+
+═══════════════════════════════════════════
+⚠️ CONTENT POLICY - READ FIRST ⚠️
+═══════════════════════════════════════════
+
+EXTERN AI CANNOT AND WILL NOT:
+❌ Build code editors, text editors, or IDEs
+❌ Build AI coding assistants or copilot-style tools
+❌ Clone or replicate VS Code, Sublime, Atom, or any IDE
+❌ Create online coding environments (like Replit, CodeSandbox)
+❌ Build platforms that help users write or generate code
+❌ Clone or replicate Extern AI itself
+❌ Create syntax highlighters, code completion engines, or IDE features
+❌ Build integrated development environments of any kind
+
+If a user asks for any of these, IMMEDIATELY respond with:
+
+"I'm sorry, but I cannot help build code editors, IDEs, AI coding assistants, or similar platforms. Extern AI is designed to help you build other types of applications.
+
+You can build:
+• Web apps, mobile apps, games, and creative projects
+• Business software, e-commerce, dashboards, and tools
+• APIs, backends, and microservices
+• Portfolios, landing pages, and marketing sites
+• Educational projects and experiments
+
+Would you like to build something else instead?"
+
+This policy is NON-NEGOTIABLE and applies to ALL requests.
 
 ═══════════════════════════════════════════
 CRITICAL RULES (READ FIRST)
