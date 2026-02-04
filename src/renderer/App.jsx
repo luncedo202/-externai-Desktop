@@ -12,7 +12,6 @@ import AnalyticsService from './services/AnalyticsService';
 import PublishService from './services/PublishService';
 import PricingPlans from './components/PricingPlans';
 import NodeWarning from './components/NodeWarning';
-import NodeWarningModal from './components/NodeWarningModal';
 import PublishedApps from './components/PublishedApps';
 import './App.css';
 
@@ -22,8 +21,6 @@ function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const [nodeStatus, setNodeStatus] = useState({ checked: false, installed: true, showWarning: false });
-  const [showNodeWarningModal, setShowNodeWarningModal] = useState(false);
-  const [nodeDownloadUrl, setNodeDownloadUrl] = useState('https://nodejs.org/en/download/');
   const [activeView, setActiveView] = useState('explorer');
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
@@ -139,13 +136,6 @@ function App() {
         installed: isAvailable, 
         showWarning: false 
       });
-      
-      // Show modal if Node.js is not available
-      if (!isAvailable) {
-        const downloadUrl = result.downloadUrl || 'https://nodejs.org/en/download/';
-        setNodeDownloadUrl(downloadUrl);
-        setShowNodeWarningModal(true);
-      }
       
       return isAvailable;
     }
@@ -828,16 +818,6 @@ function App() {
       )}
       {nodeStatus.showWarning && (
         <NodeWarning onDismiss={() => setNodeStatus(prev => ({ ...prev, showWarning: false }))} />
-      )}
-      {showNodeWarningModal && (
-        <NodeWarningModal
-          isOpen={showNodeWarningModal}
-          onClose={() => setShowNodeWarningModal(false)}
-          onDownload={() => {
-            window.electronAPI.shell.openExternal(nodeDownloadUrl);
-            setShowNodeWarningModal(false);
-          }}
-        />
       )}
     </div>
   );

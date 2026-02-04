@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { Terminal as XTerm } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
 import { FiX } from 'react-icons/fi';
-import Terminal from './Terminal';
+import '@xterm/xterm/css/xterm.css';
 import OutputPanel from './panels/OutputPanel';
 import ProblemsPanel from './panels/ProblemsPanel';
 import DebugConsole from './panels/DebugConsole';
 import './Panel.css';
 
-function Panel({
-  terminals,
-  onNewTerminal,
+const Panel = forwardRef(({ 
+  terminals, 
+  onNewTerminal, 
   onCloseTerminal,
   workspaceFolder,
   outputLogs = [],
@@ -21,21 +23,75 @@ function Panel({
   onUpdateTerminalStatus,
   onTerminalOutput,
   terminalRef
-}) {
+}, ref) => {
   const [activeTab, setActiveTab] = useState('terminal');
   const [activeTerminal, setActiveTerminal] = useState(null);
-  const terminalRefs = useRef({});
+  const terminalRefsMap = useRef({});
+  const terminalInstances = useRef({});
+  const fitAddons = useRef({});
+  const backendTerminalIds = useRef({}); // Store backend terminal IDs
+  const terminalOutputBuffers = useRef({}); // Store output per terminal
 
-  const handleCloseTerminal = (terminalId) => {
+  // Expose executeCommand method via ref for AI to use
+  useImperativeHandle(ref, () => ({
+    executeCommand: (command) => {
+      if (!activeTerminal) {
+        console.warn('[Panel] No active terminal for command execution');
+        return;
+      }
+      
+      const backendId = backendTerminalIds.current[activeTerminal];
+      if (!backendId) {
+        console.warn('[Panel] No backend terminal ID for active terminal');
+        return;
+      }
+      
+      // Write command + newline to the terminal
+      window.electronAPI.terminal.write(backendId, command + '\n');
+      console.log('[Panel] Executed command:', command);
+    },
+    getTerminalOutput: () => {
+      if (!activeTerminal) return '';
+      return terminalOutputBuffers.current[activeTerminal] || '';
+    }
+  }), [activeTerminal]);
+
+  // Also expose via terminalRef prop if provided (initial setup)
+  useEffect(() => {
+    if (terminalRef && !terminalRef.current) {
+      terminalRef.current = {
+        executeCommand: (command) => {
+          console.warn('[Panel] Terminal not yet initialized, command queued');
+        },
+        getTerminalOutput: () => ''
+      };
+    }
+  }, [terminalRef]);
+
+  const handleCloseTerminal = async (terminalId) => {
+    // Close the terminal in the backend
+    const backendId = backendTerminalIds.current[terminalId];
+    if (backendId) {
+      try {
+        await window.electronAPI.terminal.kill(backendId);
+      } catch (error) {
+        console.error('Error killing terminal:', error);
+      }
+    }
+    
+    // Cleanup refs
+    if (terminalInstances.current[terminalId]) {
+      terminalInstances.current[terminalId].dispose();
+      delete terminalInstances.current[terminalId];
+    }
+    delete terminalRefsMap.current[terminalId];
+    delete fitAddons.current[terminalId];
+    delete backendTerminalIds.current[terminalId];
+    delete terminalOutputBuffers.current[terminalId];
+    
+    // Close in parent component
     if (onCloseTerminal) {
       onCloseTerminal(terminalId);
-    }
-    // If we're closing the active terminal, switch to another one
-    if (activeTerminal === terminalId && terminals.length > 1) {
-      const otherTerminal = terminals.find(t => t.id !== terminalId);
-      if (otherTerminal) {
-        setActiveTerminal(otherTerminal.id);
-      }
     }
   };
 
@@ -45,24 +101,144 @@ function Panel({
     }
   }, [terminals, activeTerminal]);
 
-  // Expose active terminal ref to parent
   useEffect(() => {
-    if (terminalRef && activeTerminal && terminalRefs.current[activeTerminal]) {
-      terminalRef.current = terminalRefs.current[activeTerminal];
-    }
-  }, [activeTerminal, terminalRef]);
+    const initTerminal = async (terminalId) => {
+      const container = terminalRefsMap.current[terminalId];
+      if (!container || terminalInstances.current[terminalId]) return;
 
-  const handleTerminalOutput = (terminalId, output) => {
-    if (onTerminalOutput) {
-      onTerminalOutput(terminalId, output, output);
-    }
-  };
+      // Initialize output buffer
+      terminalOutputBuffers.current[terminalId] = '';
 
-  const handleStatusChange = (terminalId, status) => {
-    if (onUpdateTerminalStatus) {
-      onUpdateTerminalStatus(terminalId, status);
+      const term = new XTerm({
+        cursorBlink: true,
+        fontSize: 12,
+        fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
+        theme: theme === 'light' ? {
+          background: '#ffffff',
+          foreground: '#3b3b3b',
+          cursor: '#3b3b3b',
+          selection: '#add6ff',
+          black: '#000000',
+          red: '#c5221f',
+          green: '#1e8e3e',
+          yellow: '#f57c00',
+          blue: '#1967d2',
+          magenta: '#a142f4',
+          cyan: '#00acc1',
+          white: '#5f6368',
+          brightBlack: '#80868b',
+          brightRed: '#ea4335',
+          brightGreen: '#34a853',
+          brightYellow: '#fbbc04',
+          brightBlue: '#4285f4',
+          brightMagenta: '#c678dd',
+          brightCyan: '#00bcd4',
+          brightWhite: '#3b3b3b',
+        } : {
+          background: '#1e1e1e',
+          foreground: '#cccccc',
+          cursor: '#ffffff',
+          selection: '#264f78',
+        },
+      });
+
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(container);
+      fitAddon.fit();
+
+      terminalInstances.current[terminalId] = term;
+      fitAddons.current[terminalId] = fitAddon;
+
+      // Create terminal backend
+      const result = await window.electronAPI.terminal.create(workspaceFolder);
+      
+      if (!result.success) {
+        // Show error message in terminal
+        term.writeln('\x1b[1;31mTerminal Error:\x1b[0m ' + result.error);
+        term.writeln('\x1b[33mPlease run:\x1b[0m npm rebuild node-pty');
+        term.writeln('');
+        term.writeln('The app will work without terminal, but you won\'t be able to run commands.');
+        return;
+      }
+      
+      if (result.success) {
+        // Store the backend terminal ID
+        backendTerminalIds.current[terminalId] = result.terminalId;
+        
+        // Update terminalRef with the now-available backend ID
+        if (terminalRef) {
+          terminalRef.current = {
+            executeCommand: (command) => {
+              const backendId = backendTerminalIds.current[activeTerminal];
+              if (!backendId) {
+                console.warn('[Panel] No backend terminal ID for command execution');
+                return;
+              }
+              window.electronAPI.terminal.write(backendId, command + '\n');
+              console.log('[Panel] Executed command via terminalRef:', command);
+            },
+            getTerminalOutput: () => {
+              return terminalOutputBuffers.current[activeTerminal] || '';
+            }
+          };
+        }
+        
+        // Handle terminal input from user
+        term.onData((data) => {
+          window.electronAPI.terminal.write(result.terminalId, data);
+        });
+
+        // Handle terminal data from backend (node-pty)
+        window.electronAPI.terminal.onData((id, data) => {
+          if (id === result.terminalId) {
+            term.write(data);
+            
+            // Store output in buffer (keep last ~50KB)
+            terminalOutputBuffers.current[terminalId] = 
+              (terminalOutputBuffers.current[terminalId] || '') + data;
+            if (terminalOutputBuffers.current[terminalId].length > 50000) {
+              terminalOutputBuffers.current[terminalId] = 
+                terminalOutputBuffers.current[terminalId].slice(-40000);
+            }
+            
+            // Notify parent of terminal output for AI auto-fix
+            if (onTerminalOutput) {
+              onTerminalOutput(terminalId, data, terminalOutputBuffers.current[terminalId]);
+            }
+            
+            // Detect command completion status for terminal tab indicators
+            if (onUpdateTerminalStatus) {
+              // Check for common error patterns
+              const hasError = /error|Error|ERROR|failed|Failed|FAILED|npm ERR!|ENOENT|EACCES|command not found/.test(data);
+              const hasSuccess = /✓|success|Success|SUCCESS|Done|Compiled successfully|webpack compiled|Ready in|Server running/.test(data);
+              
+              if (hasError) {
+                onUpdateTerminalStatus(terminalId, 'error');
+              } else if (hasSuccess) {
+                onUpdateTerminalStatus(terminalId, 'success');
+              }
+            }
+          }
+        });
+
+        // Handle terminal resize
+        const resizeObserver = new ResizeObserver(() => {
+          fitAddon.fit();
+          window.electronAPI.terminal.resize(
+            result.terminalId,
+            term.cols,
+            term.rows
+          );
+        });
+        resizeObserver.observe(container);
+      }
+    };
+
+    if (activeTerminal && terminalRefsMap.current[activeTerminal]) {
+      initTerminal(activeTerminal);
     }
-  };
+  }, [activeTerminal, workspaceFolder, theme, onTerminalOutput, onUpdateTerminalStatus]);
 
   return (
     <div className="panel">
@@ -98,14 +274,11 @@ function Panel({
             {terminals.map((terminal) => (
               <button
                 key={terminal.id}
-                className={`terminal-tab ${activeTerminal === terminal.id ? 'active' : ''}`}
+                className={`terminal-tab ${activeTerminal === terminal.id ? 'active' : ''} ${terminal.status || ''}`}
                 onClick={() => setActiveTerminal(terminal.id)}
               >
-                {terminal.status && (
-                  <span className={`terminal-status-dot ${terminal.status}`} />
-                )}
                 <span className="terminal-tab-name">{terminal.name}</span>
-                <span
+                <span 
                   className="terminal-close-button"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -128,16 +301,10 @@ function Panel({
             {terminals.map((terminal) => (
               <div
                 key={terminal.id}
+                ref={(el) => (terminalRefsMap.current[terminal.id] = el)}
                 className={`terminal-instance ${activeTerminal === terminal.id ? 'active' : 'hidden'}`}
-              >
-                <Terminal
-                  ref={(el) => terminalRefs.current[terminal.id] = el}
-                  terminalId={terminal.id}
-                  workspaceFolder={workspaceFolder}
-                  onOutput={(output) => handleTerminalOutput(terminal.id, output)}
-                  onStatusChange={(status) => handleStatusChange(terminal.id, status)}
-                />
-              </div>
+                data-terminal-id={backendTerminalIds.current[terminal.id] || ''}
+              />
             ))}
           </div>
         )}
@@ -161,6 +328,8 @@ function Panel({
       </div>
     </div>
   );
-}
+});
+
+Panel.displayName = 'Panel';
 
 export default Panel;
