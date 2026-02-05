@@ -108,39 +108,9 @@ function App() {
     setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
   };
 
-  // Check Node.js only when a command that needs it is about to run
-  // With bundled Node.js, this should almost always succeed
+  // Skip Node.js check - just allow all commands to run
+  // The terminal will show appropriate errors if needed
   const checkNodeBeforeCommand = async (command) => {
-    // List of commands that require Node.js
-    const nodeCommands = ['npm', 'npx', 'node', 'yarn', 'pnpm'];
-    const needsNode = nodeCommands.some(cmd => 
-      command.trim().startsWith(cmd) || command.includes(` ${cmd} `)
-    );
-
-    if (!needsNode) {
-      return true; // Command doesn't need Node.js, allow it
-    }
-
-    // Check if we've already verified Node.js is installed
-    if (nodeStatus.checked && nodeStatus.installed) {
-      return true; // Already verified, Node.js is available
-    }
-
-    // Check if Node.js is available
-    if (window.electronAPI?.system?.checkNode) {
-      const result = await window.electronAPI.system.checkNode();
-      const isAvailable = result.installed;
-      
-      setNodeStatus({ 
-        checked: true, 
-        installed: isAvailable, 
-        showWarning: false 
-      });
-      
-      return isAvailable;
-    }
-
-    // If we can't check, assume Node.js is available
     return true;
   };
 
