@@ -646,22 +646,7 @@ function App() {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
   };
 
-  // Automatically create a terminal on app start
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (terminals.length === 0) {
-        const initialTerminal = {
-          id: Date.now().toString(),
-          name: 'Terminal 1',
-          status: null
-        };
-        setTerminals([initialTerminal]);
-        setPanelVisible(true);
-      }
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, []); // Run only once on mount
+  // Terminal is already created in initial state - no need for useEffect
 
   const getLanguageFromExtension = (ext) => {
     const languageMap = {

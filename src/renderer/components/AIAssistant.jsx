@@ -2078,42 +2078,45 @@ Could you provide more details about what you'd like to build?`;
             break; // Stop executing further commands
           }
           
-          // Execute command via runCommand API (reliable output capture)
-          // Use project subdirectory if files were created there
+          // For regular commands (npm install, etc.), run in visible PTY terminal
           const commandWorkingDir = projectSubdirRef.current 
             ? `${workspaceFolderRef.current}/${projectSubdirRef.current}`
             : workspaceFolderRef.current;
           
           console.log('📂 Running command in directory:', commandWorkingDir);
-          const result = await window.electronAPI.terminal.runCommand(command, commandWorkingDir);
           
-          const commandOutput = (result.stdout || '') + (result.stderr || '');
-          const lowerOutput = commandOutput.toLowerCase();
+          // Capture terminal output before command
+          const outputBefore = terminalOutput || '';
           
-          // Echo the command and result to the visible terminal for user visibility
+          // Run command in visible PTY terminal
           if (terminalRef?.current?.executeCommand) {
-            // Show what command was run and its output, including the directory if in a subdir
-            const dirInfo = projectSubdirRef.current ? ` (in ${projectSubdirRef.current}/)` : '';
-            terminalRef.current.executeCommand(`echo "───── AI executed${dirInfo}: ${command.replace(/"/g, '\\"')} ─────"`);
+            const dirPrefix = projectSubdirRef.current ? `cd "${commandWorkingDir}" && ` : '';
+            terminalRef.current.executeCommand(`${dirPrefix}${command}`);
           }
           
-          // Better error detection - avoid false positives
-          const hasActualError = !result.success || 
-            (result.stderr && result.stderr.trim().length > 0 && (
-              lowerOutput.includes('error:') ||
-              lowerOutput.includes('error ') ||
-              lowerOutput.includes('failed') ||
-              lowerOutput.includes('command not found') ||
-              lowerOutput.includes('npm err!') ||
-              lowerOutput.includes('cannot find module') ||
-              lowerOutput.includes('syntaxerror') ||
-              lowerOutput.includes('typeerror') ||
-              lowerOutput.includes('referenceerror') ||
-              lowerOutput.includes('enoent') ||
-              lowerOutput.includes('permission denied')
-            ));
+          // Wait for command to complete (estimate based on command type)
+          const isInstallCommand = command.includes('npm install') || command.includes('yarn add') || 
+            command.includes('pnpm install') || command.includes('pip install');
+          const waitTime = isInstallCommand ? 15000 : 5000; // 15s for install, 5s for others
           
-          const hasError = hasActualError;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          
+          // Get new terminal output and extract what was added
+          const outputAfter = terminalOutput || '';
+          const newOutput = outputAfter.slice(outputBefore.length);
+          const lowerOutput = newOutput.toLowerCase();
+          
+          // Detect errors from terminal output
+          const hasError = 
+            lowerOutput.includes('error:') ||
+            lowerOutput.includes('npm err!') ||
+            lowerOutput.includes('command not found') ||
+            lowerOutput.includes('cannot find module') ||
+            lowerOutput.includes('syntaxerror') ||
+            lowerOutput.includes('typeerror') ||
+            lowerOutput.includes('enoent') ||
+            lowerOutput.includes('permission denied') ||
+            lowerOutput.includes('failed');
 
           // Update status message
           setMessages(prev => prev.map(msg =>
@@ -2122,8 +2125,8 @@ Could you provide more details about what you'd like to build?`;
                   ...msg, 
                   isWorking: false,
                   content: hasError 
-                    ? `❌ ${command}\n\`\`\`\n${commandOutput.slice(0, 500)}\n\`\`\``
-                    : `✅ ${command}` + (commandOutput.trim() ? `\n\`\`\`\n${commandOutput.slice(0, 300)}\n\`\`\`` : '')
+                    ? `❌ ${command} - Check terminal for details`
+                    : `✅ ${command}`
                 }
               : msg
           ));
@@ -2136,8 +2139,8 @@ Could you provide more details about what you'd like to build?`;
             onUpdateTerminalStatus('terminal-1', hasError ? 'error' : 'success');
           }
 
-          // Auto-detection of dev server URL
-          if (!hasError && isRunCommand && commandOutput) {
+          // Auto-detection of dev server URL from terminal output
+          if (!hasError && isRunCommand && newOutput) {
             const urlPatterns = [
               /(?:Local|➜\s+Local|Network):\s+(https?:\/\/[^\s]+)/i,
               /(?:running on|listening on|server running at):\s+(https?:\/\/[^\s]+)/i,
@@ -2147,7 +2150,7 @@ Could you provide more details about what you'd like to build?`;
 
             let detectedUrl = null;
             for (const pattern of urlPatterns) {
-              const match = commandOutput.match(pattern);
+              const match = newOutput.match(pattern);
               if (match) {
                 detectedUrl = (match[1] || match[0]).replace(/\x1b\[[0-9;]*m/g, '').trim();
                 break;
@@ -2163,7 +2166,7 @@ Could you provide more details about what you'd like to build?`;
           if (hasError) {
             debug('❌ Command failed, attempting auto-fix...');
             
-            const errorOutput = commandOutput || 'Command failed with unknown error';
+            const errorOutput = newOutput || 'Command failed with unknown error';
             
             // Analyze the error to provide better context to user
             const errorAnalysis = analyzeError(errorOutput, command);
