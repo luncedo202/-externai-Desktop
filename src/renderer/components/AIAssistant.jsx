@@ -2717,8 +2717,8 @@ Provide the fix now.`
       });
     }
 
-    // ENFORCE 8 FILE LIMIT - only process first 8 files
-    const MAX_FILES = 8;
+    // ENFORCE 10 FILE LIMIT - only process first 10 files
+    const MAX_FILES = 10;
     const blocksToCreate = fileBlocks.slice(0, MAX_FILES);
     if (fileBlocks.length > MAX_FILES) {
       console.warn(`[WARN] AI generated ${fileBlocks.length} files, limiting to ${MAX_FILES}`);

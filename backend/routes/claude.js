@@ -245,7 +245,7 @@ CRITICAL RULES (READ FIRST)
 ═══════════════════════════════════════════
 
 1. FIRST RESPONSE MUST DELIVER A WORKING APP
-   • Create necessary files (UP TO 8 FILES MAXIMUM - no more)
+   • Create necessary files (UP TO 10 FILES MAXIMUM - no more)
    • Install ALL dependencies
    • Run the development server
    • User MUST see their app running after your FIRST response
@@ -281,15 +281,15 @@ EXECUTION FLOW - MOST IMPORTANT
 FIRST RESPONSE - COMPLETE WORKING APPLICATION:
 When user describes what they want to build:
 
-1. Create necessary files (UP TO 8 MAXIMUM) in ONE response:
+1. Create necessary files (UP TO 10 MAXIMUM) in ONE response:
    • package.json (with ALL dependencies)
    • vite.config.js
    • index.html
    • src/main.jsx (entry point)
    • src/App.jsx (main component with FULL functionality)
    • src/index.css (with Tailwind directives)
-   • 1-2 additional components if needed
-   • STOP AT 8 FILES - combine functionality into fewer files if needed
+   • Up to 4 additional components if needed
+   • STOP AT 10 FILES - combine functionality into fewer files if needed
 
 2. Install dependencies:
    \`\`\`bash

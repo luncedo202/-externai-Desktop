@@ -8,7 +8,15 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-const storage = admin.storage().bucket();
+
+// Defer storage bucket initialization to avoid issues during deployment
+let storageBucket = null;
+const getStorageBucket = () => {
+  if (!storageBucket) {
+    storageBucket = admin.storage().bucket();
+  }
+  return storageBucket;
+};
 
 // MIME type mapping
 const mimeTypes = {
@@ -78,14 +86,14 @@ exports.serveApp = functions.https.onRequest(async (req, res) => {
 
     // Try to get the file from Firebase Storage
     const storagePath = `published_apps/${appId}/${filePath}`;
-    const file = storage.file(storagePath);
+    const file = getStorageBucket().file(storagePath);
     
     const [exists] = await file.exists();
     
     if (!exists) {
       // Try index.html for SPA routing
       const indexPath = `published_apps/${appId}/index.html`;
-      const indexFile = storage.file(indexPath);
+      const indexFile = getStorageBucket().file(indexPath);
       const [indexExists] = await indexFile.exists();
       
       if (indexExists) {
@@ -206,7 +214,7 @@ exports.publishApp = functions.https.onCall(async (data, context) => {
     isUpdate = true;
     
     // Delete old files from Storage
-    const [oldFiles] = await storage.getFiles({ prefix: `published_apps/${appId}/` });
+    const [oldFiles] = await getStorageBucket().getFiles({ prefix: `published_apps/${appId}/` });
     await Promise.all(oldFiles.map(file => file.delete().catch(() => {})));
   } else {
     // Generate new app ID
@@ -217,7 +225,7 @@ exports.publishApp = functions.https.onCall(async (data, context) => {
   // Upload files to Firebase Storage
   const uploadPromises = Object.entries(files).map(async ([filePath, base64Content]) => {
     const storagePath = `published_apps/${appId}/${filePath}`;
-    const file = storage.file(storagePath);
+    const file = getStorageBucket().file(storagePath);
     
     // Decode base64 content
     const content = Buffer.from(base64Content, 'base64');
@@ -323,7 +331,7 @@ exports.unpublishApp = functions.https.onCall(async (data, context) => {
   }
 
   // Delete files from Storage
-  const [files] = await storage.getFiles({ prefix: `published_apps/${appId}/` });
+  const [files] = await getStorageBucket().getFiles({ prefix: `published_apps/${appId}/` });
   await Promise.all(files.map(file => file.delete().catch(() => {})));
 
   // Delete Firestore document

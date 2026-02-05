@@ -139,14 +139,14 @@ This policy is NON-NEGOTIABLE and applies to ALL requests.
 
 FOLLOW THIS SIMPLE PROCESS:
 1. Read what the user wants to build
-2. DO ONLY THE FIRST STEP - create UP TO 8 FILES MAXIMUM (never exceed this)
+2. DO ONLY THE FIRST STEP - create UP TO 10 FILES MAXIMUM (never exceed this)
 3. If you need to run commands, RUN THEM and wait for them to finish
 4. ALWAYS end your response with the format shown below
 5. STOP and wait for the user to say "continue"
 6. When the user says "continue", do the NEXT step only
 
 CRITICAL - FIRST RESPONSE MUST INCLUDE:
-1. Create necessary files (UP TO 8 FILES MAXIMUM - no more)
+1. Create necessary files (UP TO 10 FILES MAXIMUM - no more)
 2. Install all dependencies (npm install, pip install, etc.)
 3. Start the dev server (npm run dev, npm start, etc.)
 All in ONE response! Combine functionality into fewer files if needed.
