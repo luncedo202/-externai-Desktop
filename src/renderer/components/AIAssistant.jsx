@@ -2668,6 +2668,52 @@ Provide the fix now.`
       return; // No code blocks for files, nothing to do
     }
 
+    // CRITICAL: Detect and strip project subdirectory prefixes
+    // If AI creates files like "amazon-store/src/App.jsx", strip "amazon-store/" 
+    // because user's workspace IS the project root
+    const topLevelDirs = fileBlocks
+      .map(block => {
+        const parts = block.filename.replace(/^\.\//, '').split('/');
+        // Check if first part looks like a project directory (not src, public, etc)
+        if (parts.length > 1) {
+          const firstDir = parts[0];
+          // Common legitimate top-level dirs that should NOT be stripped
+          const legitimateDirs = ['src', 'public', 'assets', 'lib', 'dist', 'build', 'test', 'tests', 
+            'spec', 'specs', 'components', 'pages', 'styles', 'utils', 'hooks', 'services', 
+            'api', 'config', 'scripts', 'docs', 'node_modules', '.github', '.vscode'];
+          if (!legitimateDirs.includes(firstDir.toLowerCase())) {
+            return firstDir;
+          }
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    // If ALL files share the same non-standard top-level directory, strip it
+    let projectPrefix = null;
+    if (topLevelDirs.length > 0 && topLevelDirs.length === fileBlocks.filter(b => {
+      const parts = b.filename.replace(/^\.\//, '').split('/');
+      return parts.length > 1;
+    }).length) {
+      const uniqueDirs = [...new Set(topLevelDirs)];
+      if (uniqueDirs.length === 1) {
+        projectPrefix = uniqueDirs[0];
+        console.log(`[INFO] 🔧 Detected project subdirectory prefix: "${projectPrefix}/" - will be stripped`);
+      }
+    }
+
+    // Strip the project prefix from all filenames if detected
+    if (projectPrefix) {
+      fileBlocks.forEach(block => {
+        const cleanFilename = block.filename.replace(/^\.\//, '');
+        if (cleanFilename.startsWith(projectPrefix + '/')) {
+          const newFilename = cleanFilename.substring(projectPrefix.length + 1);
+          console.log(`[INFO] 📝 Stripping prefix: "${block.filename}" → "${newFilename}"`);
+          block.filename = newFilename;
+        }
+      });
+    }
+
     console.log('[INFO] Starting automatic file creation for', fileBlocks.length, 'code blocks');
 
     // Show file creation overview - removed, we show each file individually
