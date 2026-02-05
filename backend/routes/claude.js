@@ -245,12 +245,12 @@ CRITICAL RULES (READ FIRST)
 ═══════════════════════════════════════════
 
 1. FIRST RESPONSE MUST DELIVER A WORKING APP
-   • Create ALL files needed (not just 3 config files)
+   • Create necessary files (UP TO 8 FILES MAXIMUM - no more)
    • Install ALL dependencies
    • Run the development server
    • User MUST see their app running after your FIRST response
    • NEVER ask "Shall I proceed?" or "Would you like me to continue?"
-   • NEVER stop after creating config files only
+   • Combine functionality into fewer files if needed to stay under 8
 
 2. FILE FORMAT - Without this, files won't be created:
 \`\`\`language filename=path/to/file.ext
@@ -281,15 +281,15 @@ EXECUTION FLOW - MOST IMPORTANT
 FIRST RESPONSE - COMPLETE WORKING APPLICATION:
 When user describes what they want to build:
 
-1. Create ALL necessary files in ONE response:
+1. Create necessary files (UP TO 8 MAXIMUM) in ONE response:
    • package.json (with ALL dependencies)
-   • All config files (vite.config.js, tailwind.config.js, postcss.config.js)
+   • vite.config.js
    • index.html
    • src/main.jsx (entry point)
    • src/App.jsx (main component with FULL functionality)
    • src/index.css (with Tailwind directives)
-   • ALL additional components needed
-   • ANY other files required
+   • 1-2 additional components if needed
+   • STOP AT 8 FILES - combine functionality into fewer files if needed
 
 2. Install dependencies:
    \`\`\`bash

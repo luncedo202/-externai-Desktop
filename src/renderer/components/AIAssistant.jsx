@@ -2714,7 +2714,14 @@ Provide the fix now.`
       });
     }
 
-    console.log('[INFO] Starting automatic file creation for', fileBlocks.length, 'code blocks');
+    // ENFORCE 8 FILE LIMIT - only process first 8 files
+    const MAX_FILES = 8;
+    const blocksToCreate = fileBlocks.slice(0, MAX_FILES);
+    if (fileBlocks.length > MAX_FILES) {
+      console.warn(`[WARN] AI generated ${fileBlocks.length} files, limiting to ${MAX_FILES}`);
+    }
+
+    console.log('[INFO] Starting automatic file creation for', blocksToCreate.length, 'code blocks');
 
     // Show file creation overview - removed, we show each file individually
 
@@ -2722,8 +2729,8 @@ Provide the fix now.`
     let createdCount = 0;
     const createdFiles = [];
 
-    for (let i = 0; i < fileBlocks.length; i++) {
-      const block = fileBlocks[i];
+    for (let i = 0; i < blocksToCreate.length; i++) {
+      const block = blocksToCreate[i];
       const blockId = `${messageId}-block-${i}`;
 
       // Mark as creating
@@ -2732,7 +2739,7 @@ Provide the fix now.`
         [blockId]: { status: 'creating', filename: null }
       }));
 
-      debug(`🔨 Processing code block ${i + 1}/${fileBlocks.length}:`, block.language);
+      debug(`🔨 Processing code block ${i + 1}/${blocksToCreate.length}:`, block.language);
 
       try {
         // Use filename from the code block (already validated to exist in filter above)
