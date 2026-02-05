@@ -1937,6 +1937,7 @@ Could you provide more details about what you'd like to build?`;
           }
         }
 
+        // Check if this is a long-running dev server command
         const isRunCommand = command.includes('npm run') || command.includes('npm start') ||
           command.includes('yarn dev') || command.includes('pnpm dev') || 
           command.includes('npm dev') || command.includes('vite') ||
@@ -1953,93 +1954,76 @@ Could you provide more details about what you'd like to build?`;
         ]);
 
         try {
-          // Execute command in the visible terminal if available
-          if (terminalRef?.current?.executeCommand) {
+          // For long-running dev server commands, use PTY terminal (no output capture needed)
+          if (isRunCommand && terminalRef?.current?.executeCommand) {
+            // Long-running commands go to PTY terminal only
             terminalRef.current.executeCommand(command);
             
-            // For long-running commands, don't wait - just update status immediately
-            if (isRunCommand) {
-              // Wait a bit longer for dev server to output URL
-              await new Promise(resolve => setTimeout(resolve, 3000));
+            // Wait a bit longer for dev server to output URL
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            console.log('🔍 Checking for dev server URL in terminal output...');
+            console.log('Terminal output available:', !!terminalOutput);
+            
+            // Try to get initial output from IPC to detect URL
+            try {
+              await window.electronAPI.terminal.runCommand(`echo "checking..."`, workspaceFolderRef.current);
+              // The above is just to trigger any buffered output, actual detection happens via terminalOutput prop
+            } catch (err) {
+              console.log('Could not check terminal output:', err);
+            }
+            
+            // Try to detect URL from recent terminal output
+            if (terminalOutput) {
+              console.log('Terminal output:', terminalOutput.slice(-500)); // Last 500 chars
               
-              console.log('🔍 Checking for dev server URL in terminal output...');
-              console.log('Terminal output available:', !!terminalOutput);
-              
-              // Try to get initial output from IPC to detect URL
-              try {
-                const result = await window.electronAPI.terminal.runCommand(`echo "checking..."`, workspaceFolderRef.current);
-                // The above is just to trigger any buffered output, actual detection happens via terminalOutput prop
-              } catch (err) {
-                console.log('Could not check terminal output:', err);
+              const urlPatterns = [
+                /(?:Local|➜\s+Local|Network):\s+(https?:\/\/[^\s]+)/i,
+                /(?:running on|listening on|server running at|Application started at):\s+(https?:\/\/[^\s]+)/i,
+                /https?:\/\/localhost:\d+/i,
+                /http:\/\/127\.0\.0\.1:\d+/i
+              ];
+
+              let detectedUrl = null;
+              for (const pattern of urlPatterns) {
+                const match = terminalOutput.match(pattern);
+                if (match) {
+                  detectedUrl = (match[1] || match[0]).replace(/\x1b\[[0-9;]*m/g, '').trim();
+                  console.log('✅ URL detected with pattern:', pattern, '→', detectedUrl);
+                  break;
+                }
               }
-              
-              // Try to detect URL from recent terminal output
-              if (terminalOutput) {
-                console.log('Terminal output:', terminalOutput.slice(-500)); // Last 500 chars
+
+              if (detectedUrl) {
+                console.log('🔗 Dev server URL detected:', detectedUrl);
                 
-                const urlPatterns = [
-                  /(?:Local|➜\s+Local|Network):\s+(https?:\/\/[^\s]+)/i,
-                  /(?:running on|listening on|server running at|Application started at):\s+(https?:\/\/[^\s]+)/i,
-                  /https?:\/\/localhost:\d+/i,
-                  /http:\/\/127\.0\.0\.1:\d+/i
-                ];
-
-                let detectedUrl = null;
-                for (const pattern of urlPatterns) {
-                  const match = terminalOutput.match(pattern);
-                  if (match) {
-                    detectedUrl = (match[1] || match[0]).replace(/\x1b\[[0-9;]*m/g, '').trim();
-                    console.log('✅ URL detected with pattern:', pattern, '→', detectedUrl);
-                    break;
-                  }
+                if (onDevServerDetected) {
+                  onDevServerDetected(detectedUrl);
                 }
-
-                if (detectedUrl) {
-                  console.log('🔗 Dev server URL detected:', detectedUrl);
-                  
-                  if (onDevServerDetected) {
-                    onDevServerDetected(detectedUrl);
-                  }
-                  
-                  // Automatically open the browser immediately (no delay)
-                  console.log('🌐 Opening browser with URL:', detectedUrl);
-                  try {
-                    await window.electronAPI.shell.openExternal(detectedUrl);
-                    console.log('✅ Browser opened successfully');
-                  } catch (err) {
-                    console.error('❌ Failed to open browser:', err);
-                  }
-                  
-                  // Update status with clickable URL
-                  setMessages(prev => prev.map(msg =>
-                    msg.id === statusMessageId
-                      ? { 
-                          ...msg, 
-                          isWorking: false,
-                          role: 'dev-server-running',
-                          devServerUrl: detectedUrl,
-                          content: `DEV_SERVER_RUNNING`
-                        }
-                      : msg
-                  ));
-                } else {
-                  console.log('❌ No URL detected in terminal output');
-                  
-                  // Update status without URL - still show dev server card
-                  setMessages(prev => prev.map(msg =>
-                    msg.id === statusMessageId
-                      ? { 
-                          ...msg, 
-                          isWorking: false,
-                          role: 'dev-server-running',
-                          devServerUrl: 'http://localhost:3000',
-                          content: `DEV_SERVER_RUNNING`
-                        }
-                      : msg
-                  ));
+                
+                // Automatically open the browser immediately (no delay)
+                console.log('🌐 Opening browser with URL:', detectedUrl);
+                try {
+                  await window.electronAPI.shell.openExternal(detectedUrl);
+                  console.log('✅ Browser opened successfully');
+                } catch (err) {
+                  console.error('❌ Failed to open browser:', err);
                 }
+                
+                // Update status with clickable URL
+                setMessages(prev => prev.map(msg =>
+                  msg.id === statusMessageId
+                    ? { 
+                        ...msg, 
+                        isWorking: false,
+                        role: 'dev-server-running',
+                        devServerUrl: detectedUrl,
+                        content: `DEV_SERVER_RUNNING`
+                      }
+                    : msg
+                ));
               } else {
-                console.log('❌ No terminal output available');
+                console.log('❌ No URL detected in terminal output');
                 
                 // Update status without URL - still show dev server card
                 setMessages(prev => prev.map(msg =>
@@ -2054,23 +2038,46 @@ Could you provide more details about what you'd like to build?`;
                     : msg
                 ));
               }
+            } else {
+              console.log('❌ No terminal output available');
               
-              AnalyticsService.trackCommand(command, true, 3000);
-              
-              if (onUpdateTerminalStatus) {
-                onUpdateTerminalStatus('terminal-1', 'success');
-              }
-              
-              // Don't continue to next command - long running processes block
-              break; // Stop executing further commands
+              // Update status without URL - still show dev server card
+              setMessages(prev => prev.map(msg =>
+                msg.id === statusMessageId
+                  ? { 
+                      ...msg, 
+                      isWorking: false,
+                      role: 'dev-server-running',
+                      devServerUrl: 'http://localhost:3000',
+                      content: `DEV_SERVER_RUNNING`
+                    }
+                  : msg
+              ));
             }
             
-            // For normal commands, wait a bit for terminal to show
-            await new Promise(resolve => setTimeout(resolve, 300));
+            AnalyticsService.trackCommand(command, true, 3000);
+            
+            if (onUpdateTerminalStatus) {
+              onUpdateTerminalStatus('terminal-1', 'success');
+            }
+            
+            // Don't continue to next command - long running processes block
+            break; // Stop executing further commands
           }
           
-          // Execute command using the new runCommand API to get results
+          // For normal commands, use runCommand API to get results for auto-fix
+          // This captures stdout/stderr for error detection
           const result = await window.electronAPI.terminal.runCommand(command, workspaceFolderRef.current);
+          
+          // Show the command and its output in the visible terminal if available
+          if (terminalRef?.current?.executeCommand) {
+            // Write a visual indicator of what ran and its result
+            const outputPreview = (result.stdout || result.stderr || '').slice(0, 200);
+            if (outputPreview) {
+              // The command was already executed via runCommand, just show the result
+              console.log('[AIAssistant] Command executed via runCommand, result captured');
+            }
+          }
           
           const commandOutput = (result.stdout || '') + (result.stderr || '');
           const lowerOutput = commandOutput.toLowerCase();

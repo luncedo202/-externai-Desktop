@@ -35,14 +35,17 @@ const Panel = forwardRef(({
   // Expose executeCommand method via ref for AI to use
   useImperativeHandle(ref, () => ({
     executeCommand: (command) => {
-      if (!activeTerminal) {
-        console.warn('[Panel] No active terminal for command execution');
+      // Get the first available terminal if no active terminal
+      const terminalId = activeTerminal || Object.keys(backendTerminalIds.current)[0];
+      
+      if (!terminalId) {
+        console.warn('[Panel] No terminal available for command execution');
         return;
       }
       
-      const backendId = backendTerminalIds.current[activeTerminal];
+      const backendId = backendTerminalIds.current[terminalId];
       if (!backendId) {
-        console.warn('[Panel] No backend terminal ID for active terminal');
+        console.warn('[Panel] No backend terminal ID for terminal:', terminalId);
         return;
       }
       
@@ -51,17 +54,35 @@ const Panel = forwardRef(({
       console.log('[Panel] Executed command:', command);
     },
     getTerminalOutput: () => {
-      if (!activeTerminal) return '';
-      return terminalOutputBuffers.current[activeTerminal] || '';
+      const terminalId = activeTerminal || Object.keys(terminalOutputBuffers.current)[0];
+      if (!terminalId) return '';
+      return terminalOutputBuffers.current[terminalId] || '';
     }
   }), [activeTerminal]);
+
+  // Store queued commands that arrive before terminal is ready
+  const queuedCommands = useRef([]);
 
   // Also expose via terminalRef prop if provided (initial setup)
   useEffect(() => {
     if (terminalRef && !terminalRef.current) {
       terminalRef.current = {
         executeCommand: (command) => {
-          console.warn('[Panel] Terminal not yet initialized, command queued');
+          console.log('[Panel] Terminal not yet initialized, queueing command:', command);
+          queuedCommands.current.push(command);
+          
+          // Retry after terminal might be ready
+          setTimeout(() => {
+            const availableTerminalIds = Object.keys(backendTerminalIds.current);
+            if (availableTerminalIds.length > 0) {
+              const backendId = backendTerminalIds.current[availableTerminalIds[availableTerminalIds.length - 1]];
+              if (backendId && queuedCommands.current.includes(command)) {
+                window.electronAPI.terminal.write(backendId, command + '\n');
+                console.log('[Panel] Executed queued command:', command);
+                queuedCommands.current = queuedCommands.current.filter(c => c !== command);
+              }
+            }
+          }, 1000);
         },
         getTerminalOutput: () => ''
       };
@@ -170,18 +191,38 @@ const Panel = forwardRef(({
         if (terminalRef) {
           terminalRef.current = {
             executeCommand: (command) => {
-              const backendId = backendTerminalIds.current[activeTerminal];
+              // Find the first available backend terminal ID
+              // This avoids stale closure issues with activeTerminal
+              const availableTerminalIds = Object.keys(backendTerminalIds.current);
+              if (availableTerminalIds.length === 0) {
+                console.warn('[Panel] No backend terminal IDs available for command execution');
+                return;
+              }
+              // Use the most recently created terminal (last in the object)
+              const backendId = backendTerminalIds.current[availableTerminalIds[availableTerminalIds.length - 1]];
               if (!backendId) {
-                console.warn('[Panel] No backend terminal ID for command execution');
+                console.warn('[Panel] No valid backend terminal ID for command execution');
                 return;
               }
               window.electronAPI.terminal.write(backendId, command + '\n');
               console.log('[Panel] Executed command via terminalRef:', command);
             },
             getTerminalOutput: () => {
-              return terminalOutputBuffers.current[activeTerminal] || '';
+              // Get output from all terminals combined
+              const allOutputs = Object.values(terminalOutputBuffers.current);
+              return allOutputs.join('\n');
             }
           };
+          
+          // Execute any queued commands now that terminal is ready
+          if (queuedCommands.current.length > 0) {
+            console.log('[Panel] Executing queued commands:', queuedCommands.current);
+            const commandsToRun = [...queuedCommands.current];
+            queuedCommands.current = [];
+            commandsToRun.forEach(cmd => {
+              window.electronAPI.terminal.write(result.terminalId, cmd + '\n');
+            });
+          }
         }
         
         // Handle terminal input from user
