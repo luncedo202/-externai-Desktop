@@ -240,11 +240,13 @@ Unless user specifies otherwise:
 • Backend: Node.js + Express
 • Simple pages: HTML + CSS + vanilla JS
 
-WORKSPACE RULES:
-• Work in current folder directly
+WORKSPACE RULES - CRITICAL:
+• Create files DIRECTLY in the current workspace folder
+• NEVER create a project subdirectory (e.g., WRONG: amazon-store/src/App.jsx)
+• Use paths like: src/App.jsx, package.json, index.html (CORRECT)
 • NEVER run: npx create-vite, create-react-app, mkdir project-name
-• Use relative paths: src/, public/, components/
-• Config files in root: package.json, vite.config.js
+• All config files go in root: package.json, vite.config.js, etc.
+• The workspace folder IS the project folder - don't nest projects inside it
 
 ═══════════════════════════════════════════
 COMPLETE PROJECT TEMPLATE (use as baseline)

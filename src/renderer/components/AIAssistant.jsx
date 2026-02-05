@@ -251,6 +251,7 @@ const AIAssistant = forwardRef(({
   const [retryContext, setRetryContext] = useState(null); // Store context for retry functionality
   const workspaceFolderRef = useRef(workspaceFolder);
   const terminalOutputRef = useRef(''); // Track terminal output for PTY-based error detection
+  const projectSubdirRef = useRef(null); // Track if files were created in a subdirectory
   
   // Command confirmation state
   const [pendingCommands, setPendingCommands] = useState(null); // Commands awaiting user confirmation
@@ -1956,8 +1957,20 @@ Could you provide more details about what you'd like to build?`;
         try {
           // For long-running dev server commands, use PTY terminal (no output capture needed)
           if (isRunCommand && terminalRef?.current?.executeCommand) {
+            // Determine the correct working directory
+            const workingDir = projectSubdirRef.current 
+              ? `${workspaceFolderRef.current}/${projectSubdirRef.current}`
+              : workspaceFolderRef.current;
+            
+            console.log('📂 Running dev server in directory:', workingDir);
+            
+            // If there's a project subdir, cd into it first
+            const finalCommand = projectSubdirRef.current
+              ? `cd "${workingDir}" && ${command}`
+              : command;
+            
             // Long-running commands go to PTY terminal only
-            terminalRef.current.executeCommand(command);
+            terminalRef.current.executeCommand(finalCommand);
             
             // Wait a bit longer for dev server to output URL
             await new Promise(resolve => setTimeout(resolve, 3000));
@@ -2065,22 +2078,24 @@ Could you provide more details about what you'd like to build?`;
             break; // Stop executing further commands
           }
           
-          // For normal commands, use runCommand API to get results for auto-fix
-          // This captures stdout/stderr for error detection
-          const result = await window.electronAPI.terminal.runCommand(command, workspaceFolderRef.current);
+          // Execute command via runCommand API (reliable output capture)
+          // Use project subdirectory if files were created there
+          const commandWorkingDir = projectSubdirRef.current 
+            ? `${workspaceFolderRef.current}/${projectSubdirRef.current}`
+            : workspaceFolderRef.current;
           
-          // Show the command and its output in the visible terminal if available
-          if (terminalRef?.current?.executeCommand) {
-            // Write a visual indicator of what ran and its result
-            const outputPreview = (result.stdout || result.stderr || '').slice(0, 200);
-            if (outputPreview) {
-              // The command was already executed via runCommand, just show the result
-              console.log('[AIAssistant] Command executed via runCommand, result captured');
-            }
-          }
+          console.log('📂 Running command in directory:', commandWorkingDir);
+          const result = await window.electronAPI.terminal.runCommand(command, commandWorkingDir);
           
           const commandOutput = (result.stdout || '') + (result.stderr || '');
           const lowerOutput = commandOutput.toLowerCase();
+          
+          // Echo the command and result to the visible terminal for user visibility
+          if (terminalRef?.current?.executeCommand) {
+            // Show what command was run and its output, including the directory if in a subdir
+            const dirInfo = projectSubdirRef.current ? ` (in ${projectSubdirRef.current}/)` : '';
+            terminalRef.current.executeCommand(`echo "───── AI executed${dirInfo}: ${command.replace(/"/g, '\\"')} ─────"`);
+          }
           
           // Better error detection - avoid false positives
           const hasActualError = !result.success || 
@@ -2621,6 +2636,9 @@ Provide the fix now.`
     console.log('[INFO] handleCreateFilesAutomatically called');
     console.log('� Workspace folder (ref):', workspaceFolderRef.current);
 
+    // Reset project subdirectory for each new file creation batch
+    projectSubdirRef.current = null;
+
     if (!workspaceFolderRef.current) {
       console.warn('[WARN] No workspace folder - skipping file creation. User needs to open a folder first.');
       return; // Silently fail if no workspace
@@ -2673,6 +2691,11 @@ Provide the fix now.`
       try {
         // Use filename from the code block (already validated to exist in filter above)
         let fileName = block.filename;
+        
+        // Remove leading ./ if present
+        if (fileName.startsWith('./')) {
+          fileName = fileName.substring(2);
+        }
 
         debug('📝 Using filename from AI:', fileName);
         
@@ -2767,6 +2790,35 @@ Provide the fix now.`
     }
 
     console.log('[OK] File creation complete. Created:', createdCount, 'files');
+
+    // Detect if files were created in a common project subdirectory
+    if (createdFiles.length > 0) {
+      // Extract top-level directories from created files
+      const topLevelDirs = createdFiles
+        .map(f => {
+          const parts = f.split('/');
+          // Check if first part is a directory (not a file at root)
+          // e.g., "amazon-store/package.json" -> "amazon-store"
+          if (parts.length > 1) {
+            return parts[0];
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      // If all files share the same top-level directory, that's our project subdir
+      if (topLevelDirs.length > 0) {
+        const uniqueDirs = [...new Set(topLevelDirs)];
+        if (uniqueDirs.length === 1) {
+          // All files are under the same subdirectory
+          projectSubdirRef.current = uniqueDirs[0];
+          console.log('[INFO] Detected project subdirectory:', projectSubdirRef.current);
+        } else {
+          // Files are in different subdirs or at root - no common project dir
+          projectSubdirRef.current = null;
+        }
+      }
+    }
 
     // CRITICAL: Force final refresh after ALL files are created
     if (createdCount > 0 && onFileCreated) {
@@ -3031,21 +3083,17 @@ Provide the fix now.`
               const serverUrl = msg.devServerUrl || 'http://localhost:3000';
               return (
                 <div key={msg.id || `devserver-${idx}`} className="dev-server-card">
-                  <div className="dev-server-icon">🎉</div>
-                  <div className="dev-server-content">
-                    <h3>Your App is Live!</h3>
-                    <p>Your application is now running and ready to view.</p>
-                    <div className="dev-server-url">{serverUrl}</div>
-                    <button 
-                      className="dev-server-open-btn"
-                      onClick={() => window.electronAPI.shell.openExternal(serverUrl)}
-                    >
-                      Open in Browser →
-                    </button>
-                    <p className="dev-server-tip">
-                      💡 Tip: Your browser should have opened automatically. If not, click the button above.
-                    </p>
+                  <div className="dev-server-header">
+                    <div className="dev-server-status-dot"></div>
+                    <span className="dev-server-title">Application Running</span>
                   </div>
+                  <div className="dev-server-url">{serverUrl}</div>
+                  <button 
+                    className="dev-server-open-btn"
+                    onClick={() => window.electronAPI.shell.openExternal(serverUrl)}
+                  >
+                    Open in Browser
+                  </button>
                 </div>
               );
             }
