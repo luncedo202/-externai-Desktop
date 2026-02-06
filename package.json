@@ -72,7 +72,8 @@
         "publish": {
             "provider": "github",
             "owner": "luncedo202",
-            "repo": "-externai-Desktop"
+            "repo": "-externai-Desktop",
+            "timeout": 600000
         },
         "directories": {
             "output": "dist",
