@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ExternAI - AI-Powered IDE for Developers</title>
-    <meta name="description" content="Build software faster with AI. ExternAI is an intelligent development environment powered by Claude 4.5.">
+    <meta name="description"
+        content="Build software faster with AI. ExternAI is an intelligent development environment powered by Claude 4.5.">
     <style>
         * {
             margin: 0;
@@ -190,12 +192,14 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
             <div class="logo">⚡ ExternAI</div>
             <div class="tagline">Build Software Faster with AI</div>
-            <div class="subtitle">An intelligent development environment powered by Claude 4.5. Code, debug, and deploy with AI assistance.</div>
+            <div class="subtitle">An intelligent development environment powered by Claude 4.5. Code, debug, and deploy
+                with AI assistance.</div>
         </header>
 
         <div class="download-section">
@@ -210,11 +214,16 @@
             <div class="other-platforms">
                 <h3>Other Platforms</h3>
                 <div class="platform-links">
-                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-x64.dmg" class="platform-link">macOS (Intel)</a>
-                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-arm64.dmg" class="platform-link">macOS (Apple Silicon)</a>
-                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-Setup.exe" class="platform-link">Windows</a>
-                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI.AppImage" class="platform-link">Linux AppImage</a>
-                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/externai_amd64.deb" class="platform-link">Linux .deb</a>
+                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-x64.dmg"
+                        class="platform-link">macOS (Intel)</a>
+                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-arm64.dmg"
+                        class="platform-link">macOS (Apple Silicon)</a>
+                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI-Setup.exe"
+                        class="platform-link">Windows</a>
+                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/ExternAI.AppImage"
+                        class="platform-link">Linux AppImage</a>
+                    <a href="https://github.com/luncedo202/-externai-Desktop/releases/latest/download/externai_amd64.deb"
+                        class="platform-link">Linux .deb</a>
                 </div>
             </div>
         </div>
@@ -223,7 +232,8 @@
             <div class="feature-card">
                 <div class="feature-icon">🤖</div>
                 <div class="feature-title">AI-Powered Coding</div>
-                <div class="feature-desc">Get intelligent code suggestions, explanations, and complete implementations from Claude 4.5.</div>
+                <div class="feature-desc">Get intelligent code suggestions, explanations, and complete implementations
+                    from Claude 4.5.</div>
             </div>
 
             <div class="feature-card">
@@ -235,19 +245,22 @@
             <div class="feature-card">
                 <div class="feature-icon">🎯</div>
                 <div class="feature-title">Full-Stack Support</div>
-                <div class="feature-desc">Build web apps, mobile apps, games, and backends with AI assistance every step of the way.</div>
+                <div class="feature-desc">Build web apps, mobile apps, games, and backends with AI assistance every step
+                    of the way.</div>
             </div>
 
             <div class="feature-card">
                 <div class="feature-icon">🔧</div>
                 <div class="feature-title">Integrated Terminal</div>
-                <div class="feature-desc">Run commands, install packages, and manage your project without leaving the IDE.</div>
+                <div class="feature-desc">Run commands, install packages, and manage your project without leaving the
+                    IDE.</div>
             </div>
 
             <div class="feature-card">
                 <div class="feature-icon">🎨</div>
                 <div class="feature-title">Modern UI</div>
-                <div class="feature-desc">Clean, intuitive interface designed for productivity. Dark mode included.</div>
+                <div class="feature-desc">Clean, intuitive interface designed for productivity. Dark mode included.
+                </div>
             </div>
 
             <div class="feature-card">
@@ -311,15 +324,70 @@
         downloadBtn.href = downloadUrl;
         downloadTextEl.textContent = downloadText;
 
-        // Fetch latest version from GitHub API
+        // Fetch latest version and assets from GitHub API
         fetch('https://api.github.com/repos/luncedo202/-externai-Desktop/releases/latest')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) throw new Error('Release not found');
+                return response.json();
+            })
             .then(data => {
                 if (data.tag_name) {
                     document.getElementById('version').textContent = data.tag_name;
                 }
+
+                // Update download link with actual asset URL if found
+                if (data.assets && data.assets.length > 0) {
+                    // Re-detect or reuse OS info
+                    const { os } = detectOS(); // This function is available in scope
+                    let asset = null;
+
+                    if (os === 'Windows') {
+                        // Look for .exe
+                        asset = data.assets.find(a => a.name.endsWith('.exe') && !a.name.includes('blockmap'));
+                    } else if (os === 'macOS') {
+                        const userAgent = window.navigator.userAgent;
+                        const isAppleSilicon = /arm64|aarch64/.test(userAgent) || /M1|M2|M3/.test(userAgent);
+
+                        // Try to find specific architecture
+                        if (isAppleSilicon) {
+                            asset = data.assets.find(a => a.name.includes('arm64') && a.name.endsWith('.dmg'));
+                        } else {
+                            asset = data.assets.find(a => a.name.includes('x64') && a.name.endsWith('.dmg'));
+                        }
+
+                        // Fallback to any dmg if specific one not found
+                        if (!asset) {
+                            asset = data.assets.find(a => a.name.endsWith('.dmg'));
+                        }
+                    } else if (os === 'Linux') {
+                        asset = data.assets.find(a => a.name.endsWith('.AppImage'));
+                    }
+
+                    if (asset) {
+                        const downloadBtn = document.getElementById('download-btn');
+                        downloadBtn.href = asset.browser_download_url;
+                        console.log('Updated download link to:', asset.browser_download_url);
+
+                        // Also update text just in case
+                        // document.getElementById('download-text').textContent += ' (v' + data.tag_name + ')';
+                    }
+
+                    // Update platform specific links in the list
+                    const windowsAsset = data.assets.find(a => a.name.endsWith('.exe') && !a.name.includes('blockmap'));
+                    const macArmAsset = data.assets.find(a => a.name.includes('arm64') && a.name.endsWith('.dmg'));
+                    const macIntelAsset = data.assets.find(a => a.name.includes('x64') && a.name.endsWith('.dmg'));
+                    const linuxAsset = data.assets.find(a => a.name.endsWith('.AppImage'));
+
+                    const links = document.querySelectorAll('.platform-link');
+                    links.forEach(link => {
+                        if (link.textContent.includes('Windows') && windowsAsset) link.href = windowsAsset.browser_download_url;
+                        if (link.textContent.includes('macOS (Apple Silicon)') && macArmAsset) link.href = macArmAsset.browser_download_url;
+                        if (link.textContent.includes('macOS (Intel)') && macIntelAsset) link.href = macIntelAsset.browser_download_url;
+                        if (link.textContent.includes('Linux AppImage') && linuxAsset) link.href = linuxAsset.browser_download_url;
+                    });
+                }
             })
-            .catch(error => console.log('Could not fetch version'));
+            .catch(error => console.log('Could not fetch version info:', error));
 
         // Track download
         downloadBtn.addEventListener('click', () => {
@@ -327,4 +395,5 @@
         });
     </script>
 </body>
+
 </html>
