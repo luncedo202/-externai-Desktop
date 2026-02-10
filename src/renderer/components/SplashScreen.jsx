@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FiCode } from 'react-icons/fi';
 import './SplashScreen.css';
 
 const SplashScreen = ({ onLoadComplete }) => {
@@ -62,24 +63,20 @@ const SplashScreen = ({ onLoadComplete }) => {
 
       {/* Main content */}
       <div className="splash-content">
-        {/* Logo */}
-        {/* <div className="splash-logo-container">
+        <div className="splash-logo-container">
           <div className="splash-logo">
             <div className="logo-icon">
-              <img
-                src="../assets/externai-logo.png"
-                alt="ExternAI"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  filter: 'drop-shadow(0 0 20px rgba(0, 217, 255, 0.5))'
-                }}
-              />
+              <FiCode size={48} color="#00d9ff" />
             </div>
             <div className="logo-glow"></div>
           </div>
-        </div> */}
+
+          <h1 className="splash-title">
+            <span className="title-extern">extern</span>
+            <span className="title-ai">AI</span>
+          </h1>
+          <p className="splash-tagline">Your AI-Powered Development Environment</p>
+        </div>
 
         {/* Progress section */}
         <div className="splash-progress-section">

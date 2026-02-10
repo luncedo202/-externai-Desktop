@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiMail, FiLock, FiUser, FiAlertCircle } from 'react-icons/fi';
+import { FiMail, FiLock, FiUser, FiAlertCircle, FiCode } from 'react-icons/fi';
 import FirebaseService from '../services/FirebaseService';
 import './AuthScreen.css';
 
@@ -59,7 +59,7 @@ function AuthScreen({ onAuthSuccess }) {
         <div className="auth-content">
           <div className="auth-info">
             <div className="auth-logo-title">
-              {/* <img src="../assets/externai-logo.png" alt="ExternAI Logo" className="auth-logo" /> */}
+              <FiCode size={40} color="#1a73e8" style={{ marginBottom: '10px' }} />
               <h1>ExternAI</h1>
             </div>
             <p className="auth-description">

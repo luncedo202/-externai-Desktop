@@ -4,17 +4,12 @@
 import FirebaseService from './FirebaseService';
 
 const isDev = import.meta.env.DEV;
-const BACKEND_URL = 'https://api-bkrpnxig4a-uc.a.run.app'; // Firebase Cloud Function URL
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (isDev ? 'http://localhost:5000' : 'https://externai-backend-production.azurewebsites.net');
 
 async function getAuthToken() {
   try {
     const token = await FirebaseService.getIdToken();
-    // Sanitize token - remove any newlines, carriage returns, or other invalid header characters
-    const sanitizedToken = token ? token.toString().replace(/[\r\n\t]/g, '').trim() : null;
-    if (!sanitizedToken) {
-      throw new Error('Invalid token received');
-    }
-    return sanitizedToken;
+    return token;
   } catch (error) {
     throw new Error('Not authenticated. Please log in.');
   }
@@ -69,25 +64,10 @@ async function getClaudeCompletion(prompt, maxTokens = 20000, timeout = 60000) {
     if (!response.ok) {
       const errorText = await response.text();
       let errorMsg = 'Request failed';
-      let errorDetails = null;
-      
       try {
         const errorJson = JSON.parse(errorText);
-        
-        // Check for content policy violation
-        if (response.status === 403 && errorJson.error === 'Prohibited Content Detected') {
-          const policyError = new Error(errorJson.message || 'Content policy violation');
-          policyError.details = errorJson;
-          throw policyError;
-        }
-        
         errorMsg = errorJson.error || errorJson.details || errorMsg;
-        errorDetails = errorJson;
       } catch (e) {
-        if (e.details) {
-          // Re-throw policy errors
-          throw e;
-        }
         errorMsg = errorText || errorMsg;
       }
       throw new Error(errorMsg);
@@ -194,14 +174,6 @@ async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null
 
     if (!response.ok) {
       const error = await response.json();
-      
-      // Check for content policy violation (403 status)
-      if (response.status === 403 && error.error === 'Prohibited Content Detected') {
-        const policyError = new Error(error.message || 'Content policy violation');
-        policyError.details = error; // Include full error details
-        throw policyError;
-      }
-      
       const errorMessage = error.error || 'Request failed';
       const details = error.details ? ` (${error.details})` : '';
       throw new Error(errorMessage + details);

@@ -318,6 +318,9 @@ const Panel = forwardRef(({
                 className={`terminal-tab ${activeTerminal === terminal.id ? 'active' : ''} ${terminal.status || ''}`}
                 onClick={() => setActiveTerminal(terminal.id)}
               >
+                {terminal.status && (
+                  <span className={`terminal-status-dot ${terminal.status}`} />
+                )}
                 <span className="terminal-tab-name">{terminal.name}</span>
                 <span 
                   className="terminal-close-button"
@@ -345,6 +348,7 @@ const Panel = forwardRef(({
                 ref={(el) => (terminalRefsMap.current[terminal.id] = el)}
                 className={`terminal-instance ${activeTerminal === terminal.id ? 'active' : 'hidden'}`}
                 data-terminal-id={backendTerminalIds.current[terminal.id] || ''}
+                data-id={terminal.id}
               />
             ))}
           </div>

@@ -398,6 +398,14 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
       )}
 
       <div className="explorer-content">
+        {workspaceFolder && (
+          <div className="workspace-folder-header">
+            <div className="workspace-folder-title">
+              <FiChevronDown size={14} />
+              <span>{workspaceFolder.split(/[/\\]/).pop().toUpperCase()}</span>
+            </div>
+          </div>
+        )}
         {folderTree ? (
           <div className="folder-tree">
             {/* Workspace folder header */}

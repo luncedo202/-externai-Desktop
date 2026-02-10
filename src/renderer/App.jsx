@@ -9,10 +9,7 @@ import AuthScreen from './components/AuthScreen';
 import SplashScreen from './components/SplashScreen';
 import FirebaseService from './services/FirebaseService';
 import AnalyticsService from './services/AnalyticsService';
-import PublishService from './services/PublishService';
 import PricingPlans from './components/PricingPlans';
-import NodeWarning from './components/NodeWarning';
-import PublishedApps from './components/PublishedApps';
 import './App.css';
 
 function App() {
@@ -20,7 +17,6 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
-  const [nodeStatus, setNodeStatus] = useState({ checked: false, installed: true, showWarning: false });
   const [activeView, setActiveView] = useState('explorer');
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
@@ -36,10 +32,7 @@ function App() {
   const [explorerRefreshTrigger, setExplorerRefreshTrigger] = useState(0);
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [theme, setTheme] = useState(() => {
-    // Always default to 'dark' in production
-    if (process.env.NODE_ENV === 'production') {
-      return 'dark';
-    }
+    // Load theme from localStorage or default to 'dark'
     return localStorage.getItem('app_theme') || 'dark';
   });
 
@@ -51,18 +44,8 @@ function App() {
   const [debugLogs, setDebugLogs] = useState([]);
   const [hasAiResponded, setHasAiResponded] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
-  const [showPublishedApps, setShowPublishedApps] = useState(false); // Show published apps modal
   const [devServerUrl, setDevServerUrl] = useState(null); // Track active dev server URL
-  const [terminalOutputBuffer, setTerminalOutputBuffer] = useState(''); // PTY output for auto-fix
-  const [terminalActivity, setTerminalActivity] = useState({
-    isActive: false,           // Terminal has running process
-    isLongRunning: false,      // It's a dev server / watch process
-    lastCommand: '',           // Last executed command
-    startTime: null,           // When command started
-  });
-  const terminalActivityTimeout = useRef(null);
   const aiAssistantRef = useRef(null);
-  const terminalRef = useRef(null);
 
   // Initialize analytics and check authentication on app start
   useEffect(() => {
@@ -108,12 +91,6 @@ function App() {
     setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
   };
 
-  // Skip Node.js check - just allow all commands to run
-  // The terminal will show appropriate errors if needed
-  const checkNodeBeforeCommand = async (command) => {
-    return true;
-  };
-
   const handleToggleTerminal = () => {
     const newPanelVisible = !panelVisible;
     setPanelVisible(newPanelVisible);
@@ -156,43 +133,10 @@ function App() {
       });
     }
 
-    // Keyboard shortcuts
-    const handleKeyDown = (e) => {
-      // Cmd+S or Ctrl+S to save
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        handleSave();
-      }
-      // Cmd+N or Ctrl+N for new file
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !e.shiftKey) {
-        e.preventDefault();
-        handleNewFile();
-      }
-      // Cmd+W or Ctrl+W to close current file
-      if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
-        e.preventDefault();
-        if (activeFile) {
-          handleCloseFile(activeFile);
-        }
-      }
-      // Cmd+` or Ctrl+` to toggle terminal
-      if ((e.metaKey || e.ctrlKey) && e.key === '`') {
-        e.preventDefault();
-        handleToggleTerminal();
-      }
-      // Cmd+B or Ctrl+B to toggle sidebar
-      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-        e.preventDefault();
-        setSidebarVisible(prev => !prev);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      // Cleanup listeners if needed
     };
-  }, [panelVisible, sidebarVisible, activeFile]);
+  }, [panelVisible, sidebarVisible]);
 
   const lastProcessedLogIndexRef = useRef(-1);
 
@@ -216,7 +160,7 @@ function App() {
           const match = logText.match(pattern);
           if (match) {
             const detectedUrl = (match[1] || match[0]).replace(/\x1b\[[0-9;]*m/g, '').trim();
-            console.log('[INFO] Auto-detected dev server from logs:', detectedUrl);
+            console.log('🌐 Auto-detected dev server from logs:', detectedUrl);
             handleDevServerDetected(detectedUrl);
             break;
           }
@@ -277,12 +221,12 @@ function App() {
 
   // Handler for AI-created files - refreshes explorer without opening
   const handleFileCreatedByAI = async (filePath) => {
-    console.log('[INFO] [App.jsx] File created by AI, refreshing explorer:', filePath);
+    console.log('🔄 [App.jsx] File created by AI, refreshing explorer:', filePath);
 
     // Check if this file is currently open in any tab
     const isOpen = openFiles.some(f => f.id === filePath);
     if (isOpen) {
-      console.log('[INFO] [App.jsx] Open file was touched by AI, updating content:', filePath);
+      console.log('📝 [App.jsx] Open file was touched by AI, updating content:', filePath);
       const result = await window.electronAPI.fs.readFile(filePath);
       if (result.success) {
         setOpenFiles(prev => prev.map(f =>
@@ -315,8 +259,8 @@ function App() {
     );
   };
 
-  // Handler for Publish button - publishes to ExternAI hosting
-  const handlePublishRequest = async () => {
+  // Handler for Publish button - tells AI to deploy to Vercel
+  const handlePublishRequest = () => {
     if (!workspaceFolder) {
       console.log('No workspace folder opened');
       return;
@@ -327,56 +271,10 @@ function App() {
       return;
     }
 
-    // Get project name from folder path
-    const projectName = workspaceFolder.split('/').pop() || 'my-app';
-
-    // Show publishing status in AI chat
-    aiAssistantRef.current.addSystemMessage('Publishing your app to ExternAI...');
-
-    try {
-      // Use PublishService to handle the upload
-      const result = await PublishService.publishProject(
-        workspaceFolder,
-        projectName,
-        (progress) => {
-          // Update status messages
-          if (progress.status === 'scanning') {
-            // Don't spam with every file
-          } else if (progress.status === 'uploading') {
-            aiAssistantRef.current.addSystemMessage('Uploading files to ExternAI servers...');
-          }
-        }
-      );
-
-      if (result.success) {
-        // Show success with shareable link
-        aiAssistantRef.current.addSystemMessage(
-          `**Your app is now live!**\n\n` +
-          `**Share this link:** ${result.url}\n\n` +
-          `Anyone with this link can use your app. ${result.isUpdate ? '(Updated existing deployment)' : ''}`
-        );
-        
-        // Open the URL in the browser
-        if (window.electronAPI?.shell?.openExternal) {
-          await window.electronAPI.shell.openExternal(result.url);
-        }
-      } else if (result.needsBuild) {
-        // Project needs to be built first
-        aiAssistantRef.current.sendMessage(
-          'The project needs to be built before publishing. Please run the build command (npm run build) and I will help you publish once it\'s ready.'
-        );
-      } else {
-        // Show error
-        aiAssistantRef.current.addSystemMessage(
-          `**Publishing failed:** ${result.error}\n\nPlease try again or check your project files.`
-        );
-      }
-    } catch (error) {
-      console.error('Publish error:', error);
-      aiAssistantRef.current.addSystemMessage(
-        `**Publishing failed:** ${error.message}\n\nPlease check your internet connection and try again.`
-      );
-    }
+    // Send instruction to AI to deploy the project
+    aiAssistantRef.current.sendMessage(
+      'Please deploy this project to Vercel. Steps: 1) Install vercel CLI globally (npm i -g vercel), 2) Run "vercel --prod" (the user will be prompted to login via browser if first time), 3) Provide me with the deployment URL when complete.'
+    );
   };
 
   const handleOpenFolder = async (folderPath) => {
@@ -427,114 +325,8 @@ function App() {
     ));
   };
 
-  // Long-running commands that should allow user prompts
-  const LONG_RUNNING_PATTERNS = [
-    /npm\s+(start|run\s+dev|run\s+start|run\s+serve|run\s+watch)/i,
-    /yarn\s+(start|dev|serve|watch)/i,
-    /pnpm\s+(start|dev|serve|watch)/i,
-    /node\s+.*server/i,
-    /nodemon/i,
-    /vite(\s|$)/i,
-    /webpack\s+serve/i,
-    /next\s+dev/i,
-    /nuxt\s+dev/i,
-    /ng\s+serve/i,
-    /gatsby\s+develop/i,
-    /python\s+-m\s+http\.server/i,
-    /live-server/i,
-    /http-server/i,
-    /serve(\s|$)/i,
-    /--watch/i,
-    /-w(\s|$)/i,
-  ];
-
-  // Handler for terminal output - captures PTY output for auto-fix and activity tracking
-  const handleTerminalOutput = (terminalId, newData, fullBuffer) => {
-    setTerminalOutputBuffer(fullBuffer);
-    
-    // Detect command execution from terminal output
-    const lowerData = newData.toLowerCase();
-    
-    // Check if this looks like a command being executed
-    const commandPatterns = [
-      /\$\s*(.+)/,           // $ npm start
-      />\s*(.+)/,            // > npm start
-      /❯\s*(.+)/,            // ❯ npm start (fish/starship)
-      /npm\s+(run|start|install)/i,
-      /yarn\s+/i,
-      /pnpm\s+/i,
-      /node\s+/i,
-      /python\s+/i,
-    ];
-    
-    const isCommandStart = commandPatterns.some(p => p.test(newData));
-    
-    // Check if it's a long-running command
-    const isLongRunning = LONG_RUNNING_PATTERNS.some(p => p.test(newData));
-    
-    // Check for completion indicators
-    const completionPatterns = [
-      'error:', 'failed', 'success', 'done', 'completed', 
-      'exit code', 'exited', 'npm err', 'error', 'built in',
-      /\$\s*$/, />\s*$/, /❯\s*$/ // Back to prompt
-    ];
-    const isCompleted = completionPatterns.some(p => 
-      typeof p === 'string' ? lowerData.includes(p) : p.test(newData)
-    );
-    
-    // Detect dev server running indicators
-    const devServerRunning = [
-      'listening on', 'server running', 'ready in', 'started server',
-      'local:', 'localhost:', 'http://localhost', 'compiled successfully',
-      'watching for file changes', 'waiting for changes'
-    ].some(p => lowerData.includes(p));
-    
-    if (isCommandStart && !isCompleted) {
-      // Command started
-      setTerminalActivity({
-        isActive: true,
-        isLongRunning: isLongRunning || devServerRunning,
-        lastCommand: newData.trim().slice(0, 50),
-        startTime: Date.now(),
-      });
-      
-      // Clear any existing timeout
-      if (terminalActivityTimeout.current) {
-        clearTimeout(terminalActivityTimeout.current);
-      }
-      
-      // For non-long-running commands, auto-clear activity after idle
-      if (!isLongRunning) {
-        terminalActivityTimeout.current = setTimeout(() => {
-          setTerminalActivity(prev => ({
-            ...prev,
-            isActive: false,
-          }));
-        }, 3000); // 3 seconds of no output = idle
-      }
-    } else if (devServerRunning) {
-      // Dev server is now running - mark as long-running
-      setTerminalActivity(prev => ({
-        ...prev,
-        isLongRunning: true,
-      }));
-    } else if (isCompleted && !devServerRunning) {
-      // Command completed (but not a dev server)
-      if (terminalActivityTimeout.current) {
-        clearTimeout(terminalActivityTimeout.current);
-      }
-      terminalActivityTimeout.current = setTimeout(() => {
-        setTerminalActivity(prev => ({
-          ...prev,
-          isActive: false,
-          isLongRunning: false,
-        }));
-      }, 500);
-    }
-  };
-
   const handleDevServerDetected = (url) => {
-    console.log('[INFO] Dev server detected:', url);
+    console.log('🌐 Dev server detected:', url);
     setDevServerUrl(url);
 
     // Auto-open in external browser
@@ -551,7 +343,7 @@ function App() {
   const handleFileUpdate = async () => {
     if (!devServerUrl) return; // No dev server running
 
-    console.log('[INFO] File updated, auto-opening browser at:', devServerUrl);
+    console.log('📝 File updated, auto-opening browser at:', devServerUrl);
 
     // Wait for HMR to process the update
     await new Promise(resolve => setTimeout(resolve, 800));
@@ -559,9 +351,9 @@ function App() {
     // Open browser
     try {
       await window.electronAPI.shell.openExternal(devServerUrl);
-      console.log('[OK] Browser opened successfully');
+      console.log('✅ Browser opened successfully');
     } catch (err) {
-      console.error('[ERROR] Failed to open browser:', err);
+      console.error('❌ Failed to open browser:', err);
     }
   };
 
@@ -646,7 +438,22 @@ function App() {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
   };
 
-  // Terminal is already created in initial state - no need for useEffect
+  // Automatically create a terminal on app start
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (terminals.length === 0) {
+        const initialTerminal = {
+          id: Date.now().toString(),
+          name: 'Terminal 1',
+          status: null
+        };
+        setTerminals([initialTerminal]);
+        setPanelVisible(true);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []); // Run only once on mount
 
   const getLanguageFromExtension = (ext) => {
     const languageMap = {
@@ -680,7 +487,6 @@ function App() {
           activeView={activeView}
           onViewChange={setActiveView}
           onAIToggle={() => setAiVisible(!aiVisible)}
-          onShowPublishedApps={() => setShowPublishedApps(true)}
         />
         {sidebarVisible && (
           <Sidebar
@@ -728,15 +534,13 @@ function App() {
               onClearDiagnostics={() => setDiagnostics([])}
               onClearDebug={() => setDebugLogs([])}
               theme={theme}
-              onUpdateTerminalStatus={handleUpdateTerminalStatus}
-              onTerminalOutput={handleTerminalOutput}
-              terminalRef={terminalRef}
             />
           )}
         </div>
         <AIAssistant
           ref={aiAssistantRef}
           onClose={() => setAiVisible(false)}
+          onUpgradeClick={() => setShowPricing(true)}
           visible={aiVisible}
           workspaceFolder={workspaceFolder}
           onOpenFolder={handleOpenFolder}
@@ -749,11 +553,6 @@ function App() {
           explorerRefreshTrigger={explorerRefreshTrigger}
           onFirstResponse={() => setHasAiResponded(true)}
           devServerUrl={devServerUrl}
-          terminalOutput={terminalOutputBuffer}
-          terminalActivity={terminalActivity}
-          checkNodeBeforeCommand={checkNodeBeforeCommand}
-          onUpgradeClick={() => setShowPricing(true)}
-          terminalRef={terminalRef}
         />
       </div>
       <StatusBar
@@ -767,12 +566,6 @@ function App() {
           onClose={() => setShowPricing(false)}
           userEmail={currentUser?.email}
         />
-      )}
-      {showPublishedApps && (
-        <PublishedApps onClose={() => setShowPublishedApps(false)} />
-      )}
-      {nodeStatus.showWarning && (
-        <NodeWarning onDismiss={() => setNodeStatus(prev => ({ ...prev, showWarning: false }))} />
       )}
     </div>
   );
