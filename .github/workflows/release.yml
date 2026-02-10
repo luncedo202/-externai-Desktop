@@ -40,18 +40,6 @@ jobs:
         run: npm ci
         env:
           npm_config_build_from_source: true
-        timeout-minutes: 30
-
-      - name: Cache Electron binaries
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/electron
-            ~/Library/Caches/electron
-            ~/AppData/Local/electron/Cache
-          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
 
       - name: Clean ALL build artifacts
         shell: bash
@@ -63,7 +51,6 @@ jobs:
         shell: bash
         run: npm run postinstall || true
         continue-on-error: true
-        timeout-minutes: 20
 
       - name: Clean build directory
         shell: bash
@@ -84,47 +71,16 @@ jobs:
         run: |
           echo "Checking build directory..."
           ls -la build/ || echo "Build directory missing!"
-
-      - name: Pre-download Electron (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: |
-          echo "Pre-downloading Electron binaries..."
-          npx --yes electron-download --version=28.0.0 --platform=win32 --arch=x64 || true
-        continue-on-error: true
-        timeout-minutes: 15
           
       - name: Build Electron App (macOS)
         if: matrix.os == 'macos-latest'
-        run: npx electron-builder --mac
-        timeout-minutes: 45
+        run: npx electron-builder --mac --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_BUILDER_CACHE: ~/.cache/electron-builder
-          USE_HARD_LINKS: false
 
       - name: Build Electron App (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash
-        run: npx electron-builder --win --x64
-        timeout-minutes: 45
+        run: npx electron-builder --win --x64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_BUILDER_CACHE: ~/AppData/Local/electron-builder/Cache
-          USE_HARD_LINKS: false
-          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
-
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v1
-        timeout-minutes: 30
-        with:
-          fail_on_unmatched_files: false
-          generate_release_notes: true
-          files: |
-            dist/*.zip
-            dist/*.exe
-            dist/*.dmg
-            dist/*.blockmap
-            dist/*.yml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
