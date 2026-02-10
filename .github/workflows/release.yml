@@ -84,6 +84,15 @@ jobs:
         run: |
           echo "Checking build directory..."
           ls -la build/ || echo "Build directory missing!"
+
+      - name: Pre-download Electron (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          echo "Pre-downloading Electron binaries..."
+          npx --yes electron-download --version=28.0.0 --platform=win32 --arch=x64 || true
+        continue-on-error: true
+        timeout-minutes: 15
           
       - name: Build Electron App (macOS)
         if: matrix.os == 'macos-latest'
@@ -103,6 +112,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_BUILDER_CACHE: ~/AppData/Local/electron-builder/Cache
           USE_HARD_LINKS: false
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
