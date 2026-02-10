@@ -40,6 +40,18 @@ jobs:
         run: npm ci
         env:
           npm_config_build_from_source: true
+        timeout-minutes: 30
+
+      - name: Cache Electron binaries
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/electron
+            ~/Library/Caches/electron
+            ~/AppData/Local/electron/Cache
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
 
       - name: Clean ALL build artifacts
         shell: bash
@@ -51,6 +63,7 @@ jobs:
         shell: bash
         run: npm run postinstall || true
         continue-on-error: true
+        timeout-minutes: 20
 
       - name: Clean build directory
         shell: bash
@@ -75,18 +88,25 @@ jobs:
       - name: Build Electron App (macOS)
         if: matrix.os == 'macos-latest'
         run: npx electron-builder --mac
+        timeout-minutes: 45
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ELECTRON_BUILDER_CACHE: ~/.cache/electron-builder
+          USE_HARD_LINKS: false
 
       - name: Build Electron App (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash
         run: npx electron-builder --win --x64
+        timeout-minutes: 45
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ELECTRON_BUILDER_CACHE: ~/AppData/Local/electron-builder/Cache
+          USE_HARD_LINKS: false
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
+        timeout-minutes: 30
         with:
           fail_on_unmatched_files: false
           generate_release_notes: true
