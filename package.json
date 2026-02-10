@@ -121,7 +121,6 @@
         },
         "win": {
             "icon": "assets/icon.ico",
-            "artifactName": "${productName}-Setup.${ext}",
             "target": [
                 {
                     "target": "nsis",
@@ -136,6 +135,9 @@
                     ]
                 }
             ]
+        },
+        "portable": {
+            "artifactName": "${productName}-Portable.${ext}"
         },
         "nsis": {
             "oneClick": false,
