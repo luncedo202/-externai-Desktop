@@ -607,6 +607,15 @@
   animation: slideInFromBottom 0.3s ease;
 }
 
+.ai-working-indicator.terminal-busy {
+  background: rgba(255, 193, 7, 0.1);
+  border-top: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.ai-working-indicator.terminal-busy .working-status {
+  color: #ffc107;
+}
+
 .working-status {
   display: flex;
   align-items: center;
@@ -637,9 +646,19 @@
 }
 
 .ai-input:disabled {
-  opacity: 0.6;
+  opacity: 0.8;
   cursor: not-allowed;
-  filter: grayscale(0.5);
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.ai-input-container.terminal-busy .ai-input-inner {
+  border-color: rgba(255, 193, 7, 0.3);
+  background: rgba(255, 193, 7, 0.03);
+}
+
+.ai-input-container.terminal-busy .ai-input-glow {
+  background: radial-gradient(circle at center, rgba(255, 193, 7, 0.15) 0%, transparent 70%);
 }
 
 .ai-send:disabled {
@@ -1796,6 +1815,7 @@
 [data-theme="light"] .voice-selector:hover {
   background: #f9fafb;
 }
+
 /* Upgrade Link Button in Markdown */
 .upgrade-link-btn {
   background: rgba(251, 191, 36, 0.1);

@@ -409,6 +409,111 @@ const AIAssistant = forwardRef(({
     }
   };
 
+  // Automatic Fix logic when a command fails
+  const handleAutoFix = async (command, errorOutput) => {
+    if (!workspaceFolderRef.current || isLoading) return;
+
+    debug(' Triggering handleAutoFix for command:', command);
+
+    // Safety: don't auto-fix if we're already fixing to avoid loops
+    if (messages.some(m => m.isAutoFixing)) {
+      debug(' Already auto-fixing, skipping nested fix');
+      return;
+    }
+
+    const statusId = `autofix-${Date.now()}`;
+    setMessages(prev => [
+      ...prev,
+      {
+        id: statusId,
+        role: 'system',
+        content: `**Command failed - Automatically fixing...**\n\nI detected an error and I'm analyzing it now.`,
+        isAutoFixing: true,
+        isWorking: true
+      }
+    ]);
+
+    setIsLoading(true);
+
+    try {
+      const history = conversationHistory.current.slice(-5);
+      const prompt = `The following command failed:\n\`\`\`bash\n${command}\n\`\`\`\n\nError output:\n\`\`\`\n${errorOutput}\n\`\`\`\n\nAnalyze this error and provide a fix. If files need changing, provide FULL file content. If missing dependencies, provide the installation command. Use the standard code block format.`;
+
+      const response = await ClaudeService.getClaudeCompletion(
+        [...history, { role: 'user', content: prompt }],
+        20000,
+        120000
+      );
+
+      // Remove status message
+      setMessages(prev => prev.filter(m => m.id !== statusId));
+
+      if (response && response.success && response.message) {
+        const fixMessage = {
+          id: Date.now() + Math.random(),
+          role: 'assistant',
+          content: `### Auto-Fix Applied\n\nAnalyzed the error and generated a fix:\n\n${response.message}`
+        };
+
+        setMessages(prev => [...prev, fixMessage]);
+        conversationHistory.current.push({ role: 'assistant', content: response.message });
+
+        // Process the fix
+        setTimeout(async () => {
+          try {
+            const fixCommands = extractCommands(response.message);
+            const fixCodeBlocks = extractCodeBlocks(response.message);
+
+            if (fixCodeBlocks.length > 0) {
+              await handleCreateFilesAutomatically(response.message, fixMessage.id);
+            }
+
+            if (fixCommands.length > 0) {
+              await executeCommandsAutomatically(response.message);
+            }
+          } catch (err) {
+            console.error('Error applying auto-fix:', err);
+          }
+        }, 500);
+      } else {
+        throw new Error(response?.error || 'Empty response from AI');
+      }
+    } catch (err) {
+      console.error('Auto-fix failed:', err);
+      // Replace status with error message 
+      setMessages(prev => prev.map(m =>
+        m.id === statusId
+          ? {
+            ...m,
+            isWorking: false,
+            content: `**Auto-fix analysis failed.**\n\nError: ${err.message}`,
+            isError: true
+          }
+          : m
+      ));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // SupervisorAI placeholder to prevent reference errors during command execution
+  const SupervisorAI = {
+    monitorCommandExecution: async (command, success, output, error) => {
+      debug(' SupervisorAI monitoring:', command);
+      return {
+        analysis: {
+          success: success,
+          message: success ? `Command executed: ${command}` : `Command failed: ${command}`,
+          shouldPauseChatAI: !success,
+          errorDetails: success ? null : {
+            context: output || error || 'Unknown terminal error',
+            suggestedFix: 'Try running npm install or check your code syntax.'
+          }
+        }
+      };
+    }
+  };
+
   // Create enhanced error message
   const createRetryErrorMessage = (errorMsg, command) => {
     const isConnectionError = errorMsg.includes('connect') || errorMsg.includes('fetch') || errorMsg.includes('ECONNREFUSED');
@@ -1503,8 +1608,12 @@ Could you provide more details about what you'd like to build?`;
         const statusMessageId = `status-${commandId}`;
         const isInstallCommand = command.includes('npm install') || command.includes('npm i ') ||
           command.includes('yarn install') || command.includes('pnpm install');
-        const isRunCommand = command.includes('npm run') || command.includes('npm start') ||
-          command.includes('yarn dev') || command.includes('pnpm dev');
+        const isRunCommand =
+          command.includes('npm run') || command.includes('npm start') ||
+          command.includes('yarn dev') || command.includes('pnpm dev') ||
+          command.includes('vite') || command.includes('next dev') ||
+          command.includes('nodemon') || command.includes('serve') ||
+          command.includes('watch') || (command.includes('.py') && command.includes('run'));
 
         let statusMessage = 'Running command...';
         if (isInstallCommand) {
@@ -1616,10 +1725,10 @@ Could you provide more details about what you'd like to build?`;
 
           // Auto-fix logic if command failed
           if (hasError) {
-            debug(' Command failed, checking backend for auto-fix...');
-            // We'll keep the auto-fix logic simplified here for now as most was already matched
-            // Actually I should probably restore the full logic but I'll skip it if it's too risky for now
-            // THE USER NEEDS A WORKING UI FIRST!
+            debug(' Command failed, triggering handleAutoFix...');
+            // Capture full output for analysis
+            const errorOutput = result.stderr || result.stdout || 'No output captured';
+            handleAutoFix(command, errorOutput);
           }
 
           if (i < commands.length - 1) {
@@ -1838,11 +1947,9 @@ Could you provide more details about what you'd like to build?`;
 
           // Auto-open browser if dev server command was successful
           if (result.success && (
-            cmdSpec.command.match(/npm\s+(run\s+)?dev/) ||
-            cmdSpec.command.match(/npm\s+start/) ||
-            cmdSpec.command.match(/yarn\s+dev/) ||
-            cmdSpec.command.match(/pnpm\s+dev/) ||
-            cmdSpec.command.match(/vite(\s+dev)?$/)
+            cmdSpec.command.match(/npm\s+(run\s+)?(dev|start|serve|watch)/) ||
+            cmdSpec.command.match(/(yarn|pnpm|bun)\s+(dev|start|serve|watch)/) ||
+            cmdSpec.command.match(/(vite|next|nodemon|serve|python.*run)/)
           )) {
             console.log(' Dev server command detected, attempting to open browser...');
 
@@ -2644,7 +2751,7 @@ Could you provide more details about what you'd like to build?`;
 
         {/* Show stop button when loading or executing commands */}
         {(isLoading || isTerminalBusy || messages.some(msg => msg.isExecuting)) && (
-          <div className="ai-working-indicator">
+          <div className={`ai-working-indicator ${isTerminalBusy ? 'terminal-busy' : ''}`}>
             <div className="working-status">
               <FiLoader className="spinning" size={14} />
               <span>{isTerminalBusy ? 'Terminal is busy...' : 'AI is working...'}</span>
@@ -2661,12 +2768,12 @@ Could you provide more details about what you'd like to build?`;
           </div>
         )}
 
-        <div className="ai-input-container">
+        <div className={`ai-input-container ${isTerminalBusy ? 'terminal-busy' : ''}`}>
           <div className="ai-input-glow"></div>
           <div className="ai-input-inner">
             <textarea
               className="ai-input"
-              placeholder={isDraggingOver ? "Drop image here..." : "What would you like to build today?"}
+              placeholder={isTerminalBusy ? "Terminal active - Waiting to complete..." : (isDraggingOver ? "Drop image here..." : "What would you like to build today?")}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -2701,7 +2808,7 @@ Could you provide more details about what you'd like to build?`;
                 type="submit"
                 className="ai-send"
                 disabled={!input.trim() || isLoading || isTerminalBusy}
-                title={isLoading || isTerminalBusy ? "AI is working..." : "Send message"}
+                title={isTerminalBusy ? "Terminal is busy..." : (isLoading ? "AI is working..." : "Send message")}
               >
                 {isLoading || isTerminalBusy ? (
                   <FiLoader className="spinning" size={18} />
