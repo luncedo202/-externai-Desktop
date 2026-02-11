@@ -352,12 +352,31 @@ ipcMain.handle('terminal:create', (event, cwd) => {
     const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
     console.log('[Terminal] Attempting to spawn:', shell, 'in', cwd || process.env.HOME);
 
+    // Ensure PATH includes common binary locations (especially for npm, node, etc.)
+    const envPath = process.env.PATH || '';
+    const additionalPaths = [
+      '/usr/local/bin',
+      '/opt/homebrew/bin',
+      '/usr/bin',
+      '/bin',
+      '/usr/sbin',
+      '/sbin'
+    ];
+
+    // Add paths that aren't already in PATH
+    const pathParts = envPath.split(':');
+    const missingPaths = additionalPaths.filter(p => !pathParts.includes(p));
+    const fullPath = [...missingPaths, envPath].filter(Boolean).join(':');
+
     const ptyProcess = pty.spawn(shell, [], {
       name: 'xterm-256color',
       cols: 80,
       rows: 30,
       cwd: cwd || process.env.HOME || process.cwd(),
-      env: process.env,
+      env: {
+        ...process.env,
+        PATH: fullPath
+      },
     });
 
     const terminalId = Date.now().toString();
