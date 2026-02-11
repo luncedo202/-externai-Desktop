@@ -1,0 +1,138 @@
+.nodejs-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.nodejs-modal {
+    background: var(--vscode-sidebar-bg);
+    border: 1px solid var(--vscode-border);
+    border-radius: 12px;
+    padding: 40px;
+    max-width: 480px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.3s ease;
+    text-align: center;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.nodejs-modal-icon {
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: center;
+}
+
+.nodejs-modal h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--vscode-fg);
+    margin: 0 0 16px 0;
+}
+
+.nodejs-modal-description {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--vscode-fg);
+    opacity: 0.8;
+    margin: 0 0 32px 0;
+}
+
+.nodejs-modal-description strong {
+    color: #68A063;
+    font-weight: 600;
+}
+
+.nodejs-modal-features {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 32px;
+    text-align: left;
+}
+
+.nodejs-feature {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--vscode-fg);
+    opacity: 0.9;
+}
+
+.nodejs-feature svg {
+    flex-shrink: 0;
+}
+
+.nodejs-modal-actions {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.nodejs-download-btn {
+    background: linear-gradient(135deg, #68A063 0%, #5a8a56 100%);
+    color: white;
+    border: none;
+    padding: 12px 32px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(104, 160, 99, 0.3);
+}
+
+.nodejs-download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(104, 160, 99, 0.4);
+}
+
+.nodejs-download-btn:active {
+    transform: translateY(0);
+}
+
+.nodejs-modal-note {
+    font-size: 12px;
+    color: var(--vscode-fg);
+    opacity: 0.6;
+    margin: 0;
+    font-style: italic;
+}
+
+[data-theme="light"] .nodejs-modal {
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}

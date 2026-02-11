@@ -5,8 +5,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   // System checks
   system: {
-    checkNode: () => ipcRenderer.invoke('system:checkNode'),
-    openExternal: (url) => ipcRenderer.invoke('system:openExternal', url),
+    checkNodeJs: () => ipcRenderer.invoke('system:checkNodeJs'),
+    downloadNodeJs: () => ipcRenderer.invoke('system:downloadNodeJs'),
+    openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   },
 
   // File System

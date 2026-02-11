@@ -10,6 +10,7 @@ import SplashScreen from './components/SplashScreen';
 import FirebaseService from './services/FirebaseService';
 import AnalyticsService from './services/AnalyticsService';
 import PricingPlans from './components/PricingPlans';
+import NodeJsRequiredModal from './components/NodeJsRequiredModal';
 import './App.css';
 
 function App() {
@@ -45,6 +46,7 @@ function App() {
   const [hasAiResponded, setHasAiResponded] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
   const [devServerUrl, setDevServerUrl] = useState(null); // Track active dev server URL
+  const [isNodeInstalled, setIsNodeInstalled] = useState(true);
   const aiAssistantRef = useRef(null);
 
   // Initialize analytics and check authentication on app start
@@ -52,6 +54,17 @@ function App() {
     // Initialize Google Analytics
     AnalyticsService.init();
     AnalyticsService.trackPageView('App Start');
+
+    // Check for Node.js installation
+    const checkNode = async () => {
+      try {
+        const result = await window.electronAPI.system.checkNodeJs();
+        setIsNodeInstalled(result.installed);
+      } catch (err) {
+        console.error('Failed to check Node.js:', err);
+      }
+    };
+    checkNode();
 
     const unsubscribe = FirebaseService.onAuthChange((user) => {
       if (user) {
@@ -474,6 +487,15 @@ function App() {
   // Show splash screen during initial load
   if (showSplash || checkingAuth) {
     return <SplashScreen onLoadComplete={() => setShowSplash(false)} />;
+  }
+
+  // Handle Node.js requirement
+  if (!isNodeInstalled) {
+    return (
+      <NodeJsRequiredModal
+        onDownload={() => window.electronAPI.system.downloadNodeJs()}
+      />
+    );
   }
 
   if (!isAuthenticated) {

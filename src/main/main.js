@@ -235,6 +235,41 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
+// Node.js Detection
+ipcMain.handle('system:checkNodeJs', async () => {
+  const { exec } = require('child_process');
+  const { promisify } = require('util');
+  const execAsync = promisify(exec);
+
+  try {
+    // Check for node
+    await execAsync('node --version');
+    // Check for npm
+    await execAsync('npm --version');
+    return { installed: true };
+  } catch (error) {
+    console.log('[System] Node.js not detected:', error.message);
+    return { installed: false };
+  }
+});
+
+ipcMain.handle('system:downloadNodeJs', async () => {
+  const nodeJsUrl = process.platform === 'darwin'
+    ? 'https://nodejs.org/dist/v20.11.0/node-v20.11.0.pkg'
+    : process.platform === 'win32'
+      ? 'https://nodejs.org/dist/v20.11.0/node-v20.11.0-x64.msi'
+      : 'https://nodejs.org/en/download/';
+
+  await shell.openExternal(nodeJsUrl);
+
+  // Close the app after opening download
+  setTimeout(() => {
+    app.quit();
+  }, 1000);
+
+  return { success: true };
+});
+
 // File System Operations
 ipcMain.handle('fs:readFile', async (event, filePath) => {
   try {
@@ -354,7 +389,19 @@ ipcMain.handle('terminal:create', (event, cwd) => {
 
     // Ensure PATH includes common binary locations (especially for npm, node, etc.)
     const envPath = process.env.PATH || '';
-    const additionalPaths = [
+    const isWindows = process.platform === 'win32';
+    const pathSeparator = isWindows ? ';' : ':';
+
+    // Platform-specific paths
+    const additionalPaths = isWindows ? [
+      'C:\\Program Files\\nodejs',
+      'C:\\Program Files (x86)\\nodejs',
+      `${process.env.APPDATA}\\npm`,
+      `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python311`,
+      `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python310`,
+      'C:\\Windows\\System32',
+      'C:\\Windows',
+    ] : [
       '/usr/local/bin',
       '/opt/homebrew/bin',
       '/usr/bin',
@@ -364,9 +411,9 @@ ipcMain.handle('terminal:create', (event, cwd) => {
     ];
 
     // Add paths that aren't already in PATH
-    const pathParts = envPath.split(':');
+    const pathParts = envPath.split(pathSeparator);
     const missingPaths = additionalPaths.filter(p => !pathParts.includes(p));
-    const fullPath = [...missingPaths, envPath].filter(Boolean).join(':');
+    const fullPath = [...missingPaths, envPath].filter(Boolean).join(pathSeparator);
 
     const ptyProcess = pty.spawn(shell, [], {
       name: 'xterm-256color',
