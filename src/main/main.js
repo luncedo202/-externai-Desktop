@@ -388,8 +388,71 @@ ipcMain.handle('dialog:saveFile', async (event, defaultPath) => {
   return result;
 });
 
+// Helper to get robust environment with full PATH for terminals and commands
+let cachedShellPath = null;
+
+async function getTerminalEnv(cwd) {
+  const isWindows = process.platform === 'win32';
+  const pathSeparator = isWindows ? ';' : ':';
+  const additionalPaths = isWindows ? [
+    'C:\\Program Files\\nodejs',
+    'C:\\Program Files (x86)\\nodejs',
+    `${process.env.APPDATA}\\npm`,
+    `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python311`,
+    `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python310`,
+    'C:\\Windows\\System32',
+    'C:\\Windows',
+  ] : [
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+    `${process.env.HOME}/.nvm/versions/node/v*/bin`, // Common NVM pattern
+    '/usr/local/share/npm/bin'
+  ];
+
+  let terminalEnv = { ...process.env };
+  let currentPath = process.env.PATH || '';
+
+  if (!isWindows) {
+    if (cachedShellPath) {
+      currentPath = cachedShellPath;
+    } else {
+      try {
+        const shell = process.env.SHELL || '/bin/zsh';
+        // Get path from interactive login shell (one-time cache)
+        const result = require('child_process').execSync(`${shell} -ilc "echo $PATH"`, { encoding: 'utf8', timeout: 5000 });
+        if (result && result.trim()) {
+          cachedShellPath = result.trim();
+          currentPath = cachedShellPath;
+        }
+      } catch (e) {
+        console.warn('[Terminal] Failed to source shell PATH:', e.message);
+      }
+    }
+  }
+
+  // Construct full path with additional fallbacks
+  const pathParts = currentPath.split(pathSeparator);
+  const missingPaths = additionalPaths.filter(p => !pathParts.includes(p));
+  let fullPath = [...pathParts, ...missingPaths].filter(Boolean).join(pathSeparator);
+
+  // Add project local node_modules/.bin
+  if (cwd) {
+    const localBin = path.join(cwd, 'node_modules', '.bin');
+    if (!fullPath.includes(localBin)) {
+      fullPath = `${localBin}${pathSeparator}${fullPath}`;
+    }
+  }
+
+  terminalEnv.PATH = fullPath;
+  return terminalEnv;
+}
+
 // Terminal Operations
-ipcMain.handle('terminal:create', (event, cwd) => {
+ipcMain.handle('terminal:create', async (event, cwd) => {
   if (!pty) {
     return {
       success: false,
@@ -398,67 +461,10 @@ ipcMain.handle('terminal:create', (event, cwd) => {
   }
 
   try {
-    // Use the user's default shell or fallback to zsh/bash
     const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
-    console.log('[Terminal] Attempting to spawn:', shell, 'in', cwd || process.env.HOME);
+    const terminalEnv = await getTerminalEnv(cwd);
 
-    // Ensure PATH includes common binary locations (especially for npm, node, etc.)
-    const envPath = process.env.PATH || '';
-    const isWindows = process.platform === 'win32';
-    const pathSeparator = isWindows ? ';' : ':';
-
-    // Platform-specific paths
-    const additionalPaths = isWindows ? [
-      'C:\\Program Files\\nodejs',
-      'C:\\Program Files (x86)\\nodejs',
-      `${process.env.APPDATA}\\npm`,
-      `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python311`,
-      `${process.env.LOCALAPPDATA}\\Programs\\Python\\Python310`,
-      'C:\\Windows\\System32',
-      'C:\\Windows',
-    ] : [
-      '/usr/local/bin',
-      '/opt/homebrew/bin',
-      '/usr/bin',
-      '/bin',
-      '/usr/sbin',
-      '/sbin'
-    ];
-
-    // Add paths that aren't already in PATH
-    const pathParts = envPath.split(pathSeparator);
-    const missingPaths = additionalPaths.filter(p => !pathParts.includes(p));
-    const fullPath = [...missingPaths, envPath].filter(Boolean).join(pathSeparator);
-
-    // For macOS/Linux, we try to source the user's shell environment
-    // to get the same PATH they have in their regular terminal
-    let terminalEnv = { ...process.env };
-
-    if (process.platform !== 'win32') {
-      try {
-        const shell = process.env.SHELL || '/bin/zsh';
-        // This trick gets the full interactive shell PATH
-        const result = require('child_process').execSync(`${shell} -ilc "echo $PATH"`, { encoding: 'utf8' });
-        if (result) {
-          terminalEnv.PATH = result.trim();
-        }
-      } catch (e) {
-        console.warn('[Terminal] Failed to source shell PATH, using fallback:', e.message);
-        terminalEnv.PATH = fullPath;
-      }
-    } else {
-      terminalEnv.PATH = fullPath;
-    }
-
-    // Explicitly add project local node_modules/.bin to PATH to ensure vite/etc work
-    if (cwd) {
-      const localBin = path.join(cwd, 'node_modules', '.bin');
-      terminalEnv.PATH = `${localBin}${pathSeparator}${terminalEnv.PATH}`;
-    }
-
-    // Add common fallback paths just in case shell sourcing missed them
-    const fallbackPaths = additionalPaths.join(pathSeparator);
-    terminalEnv.PATH = `${terminalEnv.PATH}${pathSeparator}${fallbackPaths}`;
+    console.log('[Terminal] Spawning:', shell, 'with PATH visibility');
 
     const ptyProcess = pty.spawn(shell, [], {
       name: 'xterm-256color',
@@ -1002,34 +1008,44 @@ ipcMain.handle('workspace:listFiles', async (event, dirPath) => {
 
 // Execute terminal command and return output
 ipcMain.handle('terminal:execute', async (event, { command, cwd }) => {
-  return new Promise((resolve) => {
+  try {
     const { exec } = require('child_process');
+    const terminalEnv = await getTerminalEnv(cwd);
 
-    // 25 minute timeout for all commands - covers installs, builds, migrations, etc.
-    const timeout = 25 * 60 * 1000; // 25 minutes
+    // 25 minute timeout for all commands
+    const timeout = 25 * 60 * 1000;
 
-    console.log(`[Terminal] Executing: ${command}`);
-    console.log(`[Terminal] Working directory: ${cwd}`);
+    console.log(`[Terminal] Executing command with full environment: ${command}`);
 
-    exec(command, { cwd, timeout, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`[Terminal] Command failed: ${error.message}`);
-        resolve({
-          success: false,
-          error: error.message,
-          stderr: stderr,
-          stdout: stdout
-        });
-      } else {
-        console.log(`[Terminal] Command succeeded`);
-        resolve({
-          success: true,
-          stdout: stdout,
-          stderr: stderr
-        });
-      }
+    return new Promise((resolve) => {
+      exec(command, {
+        cwd,
+        timeout,
+        env: terminalEnv,
+        maxBuffer: 10 * 1024 * 1024
+      }, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`[Terminal] Command failed: ${error.message}`);
+          resolve({
+            success: false,
+            error: error.message,
+            stderr: stderr,
+            stdout: stdout
+          });
+        } else {
+          console.log(`[Terminal] Command succeeded`);
+          resolve({
+            success: true,
+            stdout: stdout,
+            stderr: stderr
+          });
+        }
+      });
     });
-  });
+  } catch (err) {
+    console.error('[Terminal] Execute error:', err);
+    return { success: false, error: err.message };
+  }
 });
 
 // Open external URL in default browser
