@@ -34,11 +34,11 @@ function NodeJsRequiredModal({ onDownload, onDismiss }) {
                     </svg>
                 </div>
 
-                <h2>Node.js Required</h2>
+                <h2>Node.js is Compulsory</h2>
 
                 <p className="nodejs-modal-description">
-                    ExternAI requires <strong>Node.js</strong> to run terminal commands and install web apps.
-                    Node.js is not currently detected in your system path.
+                    To build and run software, <strong>Node.js</strong> must be installed on your computer.
+                    Without it, you will <strong>NOT</strong> be able to install dependencies or run the applications you create.
                 </p>
 
                 <div className="nodejs-modal-features">
@@ -47,14 +47,21 @@ function NodeJsRequiredModal({ onDownload, onDismiss }) {
                             <circle cx="10" cy="10" r="9" stroke="#68A063" strokeWidth="2" />
                             <path d="M6 10L9 13L14 7" stroke="#68A063" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        <span>Run npm commands</span>
+                        <span>Run and Build Software</span>
                     </div>
                     <div className="nodejs-feature">
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                             <circle cx="10" cy="10" r="9" stroke="#68A063" strokeWidth="2" />
                             <path d="M6 10L9 13L14 7" stroke="#68A063" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        <span>Install dependencies</span>
+                        <span>Install App Dependencies</span>
+                    </div>
+                    <div className="nodejs-feature">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <circle cx="10" cy="10" r="9" stroke="#68A063" strokeWidth="2" />
+                            <path d="M6 10L9 13L14 7" stroke="#68A063" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span>Execute Terminal Commands</span>
                     </div>
                 </div>
 
@@ -67,12 +74,12 @@ function NodeJsRequiredModal({ onDownload, onDismiss }) {
                         Download Node.js Now
                     </button>
                     <button className="nodejs-skip-btn" onClick={onDismiss}>
-                        Skip (Closing in {countdown}s...)
+                        Continue anyway (Dismissing in {countdown}s...)
                     </button>
                 </div>
 
                 <p className="nodejs-modal-note">
-                    This reminder will only shown once. If you skip, some features may be limited.
+                    Warning: Skipping this will disable most development features.
                 </p>
             </div>
         </div>
