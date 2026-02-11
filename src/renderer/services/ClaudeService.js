@@ -163,6 +163,9 @@ async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null
       });
     } catch (fetchError) {
       console.error('[ClaudeService] Fetch error:', fetchError);
+      console.error('[ClaudeService] Error name:', fetchError.name);
+      console.error('[ClaudeService] Error message:', fetchError.message);
+      console.error('[ClaudeService] Error stack:', fetchError.stack);
       if (fetchError.name === 'AbortError') {
         return { success: false, error: 'Request was cancelled', aborted: true };
       }
@@ -172,8 +175,12 @@ async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null
       throw fetchError;
     }
 
+    console.log('[ClaudeService] Response status:', response.status);
+    console.log('[ClaudeService] Response ok:', response.ok);
+
     if (!response.ok) {
       const error = await response.json();
+      console.error('[ClaudeService] Backend error response:', error);
       const errorMessage = error.error || 'Request failed';
       const details = error.details ? ` (${error.details})` : '';
       throw new Error(errorMessage + details);
