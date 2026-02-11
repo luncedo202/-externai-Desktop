@@ -247,37 +247,18 @@ ipcMain.handle('system:checkNodeJs', async () => {
     return { installed: true }; // Treat as installed if dismissed
   }
 
-  // Setup the same PATH logic as terminal for detection
-  const envPath = process.env.PATH || '';
-  const isWindows = process.platform === 'win32';
-  const pathSeparator = isWindows ? ';' : ':';
-  const additionalPaths = isWindows ? [
-    'C:\\Program Files\\nodejs',
-    'C:\\Program Files (x86)\\nodejs',
-    `${process.env.APPDATA}\\npm`,
-    'C:\\Windows\\System32',
-    'C:\\Windows',
-  ] : [
-    '/usr/local/bin',
-    '/opt/homebrew/bin',
-    '/usr/bin',
-    '/bin',
-    '/usr/sbin',
-    '/sbin'
-  ];
-
-  const pathParts = envPath.split(pathSeparator);
-  const missingPaths = additionalPaths.filter(p => !pathParts.includes(p));
-  const fullPath = [...missingPaths, envPath].filter(Boolean).join(pathSeparator);
-
   try {
-    // Check for node using the enhanced PATH
-    await execAsync('node --version', { env: { ...process.env, PATH: fullPath } });
-    // Check for npm using the enhanced PATH
-    await execAsync('npm --version', { env: { ...process.env, PATH: fullPath } });
+    if (process.platform !== 'win32') {
+      const shell = process.env.SHELL || '/bin/zsh';
+      // Use interactive login shell to find Node/NPM even with managers like NVM
+      await execAsync(`${shell} -ilc "node --version && npm --version"`, { timeout: 10000 });
+    } else {
+      await execAsync('node --version');
+      await execAsync('npm --version');
+    }
     return { installed: true };
   } catch (error) {
-    console.log('[System] Node.js not detected with enhanced PATH:', error.message);
+    console.log('[System] Node.js detection failed:', error.message);
     return { installed: false };
   }
 });
@@ -449,15 +430,42 @@ ipcMain.handle('terminal:create', (event, cwd) => {
     const missingPaths = additionalPaths.filter(p => !pathParts.includes(p));
     const fullPath = [...missingPaths, envPath].filter(Boolean).join(pathSeparator);
 
+    // For macOS/Linux, we try to source the user's shell environment
+    // to get the same PATH they have in their regular terminal
+    let terminalEnv = { ...process.env };
+
+    if (process.platform !== 'win32') {
+      try {
+        const shell = process.env.SHELL || '/bin/zsh';
+        // This trick gets the full interactive shell PATH
+        const result = require('child_process').execSync(`${shell} -ilc "echo $PATH"`, { encoding: 'utf8' });
+        if (result) {
+          terminalEnv.PATH = result.trim();
+        }
+      } catch (e) {
+        console.warn('[Terminal] Failed to source shell PATH, using fallback:', e.message);
+        terminalEnv.PATH = fullPath;
+      }
+    } else {
+      terminalEnv.PATH = fullPath;
+    }
+
+    // Explicitly add project local node_modules/.bin to PATH to ensure vite/etc work
+    if (cwd) {
+      const localBin = path.join(cwd, 'node_modules', '.bin');
+      terminalEnv.PATH = `${localBin}${pathSeparator}${terminalEnv.PATH}`;
+    }
+
+    // Add common fallback paths just in case shell sourcing missed them
+    const fallbackPaths = additionalPaths.join(pathSeparator);
+    terminalEnv.PATH = `${terminalEnv.PATH}${pathSeparator}${fallbackPaths}`;
+
     const ptyProcess = pty.spawn(shell, [], {
       name: 'xterm-256color',
       cols: 80,
       rows: 30,
       cwd: cwd || process.env.HOME || process.cwd(),
-      env: {
-        ...process.env,
-        PATH: fullPath
-      },
+      env: terminalEnv,
     });
 
     const terminalId = Date.now().toString();
