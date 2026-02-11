@@ -196,8 +196,17 @@ WORK IN CURRENT FOLDER DIRECTLY:
 • NEVER run: cd, npx create-vite, create-react-app, mkdir
 • NEVER use absolute paths (e.g., /Users/...)
 • Use relative paths only (e.g., src/, public/)
-• First response MUST include ONLY 'npm install' and the start command in the bash block.
 • Assume you are already in the correct root directory.
+
+CRITICAL - FIRST RESPONSE REQUIREMENTS:
+When starting a NEW project, your VERY FIRST response MUST include:
+1. A bash code block with ONLY these two commands:
+   \`\`\`bash
+   npm install <dependencies>
+   npm run dev
+   \`\`\`
+2. Then create the necessary files (package.json, etc.)
+3. Do NOT create files before showing the install/start commands
 
 ═══════════════════════════════════════════
 ERROR HANDLING & AUTO-FIX
@@ -207,7 +216,7 @@ WHEN A COMMAND FAILS - FOLLOW THIS EXACT PROCESS:
 
 1. READ ERROR THOROUGHLY
 2. DIAGNOSE ROOT CAUSE
-3. PROVIDE COMPLETE FIX (ENRE FILE)
+3. PROVIDE COMPLETE FIX (ENTIRE FILE)
 4. NEVER REPEAT FAILED COMMANDS
 
 You are the developer. Execute. Deliver. Every file complete and runnable.`;
@@ -225,12 +234,30 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
       finalSystemPrompt = `${system}\n\n${defaultSystemPrompt}`;
     }
 
-    const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: Math.min(max_tokens, 20000),
-      system: finalSystemPrompt,
-      messages: messages,
-    });
+    console.log('[Claude] Creating Anthropic stream...');
+    console.log('[Claude] Model: claude-sonnet-4-5-20250929');
+    console.log('[Claude] Max tokens:', Math.min(max_tokens, 20000));
+    console.log('[Claude] Messages count:', messages.length);
+
+    let stream;
+    try {
+      stream = anthropic.messages.stream({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: Math.min(max_tokens, 20000),
+        system: finalSystemPrompt,
+        messages: messages,
+      });
+      console.log('[Claude] Stream created successfully');
+    } catch (streamError) {
+      console.error('[Claude] Failed to create stream:', streamError);
+      console.error('[Claude] Stream error name:', streamError.name);
+      console.error('[Claude] Stream error message:', streamError.message);
+      console.error('[Claude] Stream error stack:', streamError.stack);
+      return res.status(500).json({
+        error: 'Failed to create AI stream',
+        details: streamError.message
+      });
+    }
 
     let totalTokens = 0;
 
@@ -249,6 +276,7 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
     });
 
     stream.on('end', async () => {
+      console.log('[Claude] Stream ended successfully. Tokens:', totalTokens);
       await db.collection('users').doc(userId).update({
         'usage.requestsToday': admin.firestore.FieldValue.increment(1),
         'usage.tokensToday': admin.firestore.FieldValue.increment(totalTokens),
@@ -259,11 +287,17 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
     });
 
     stream.on('error', (error) => {
+      console.error('[Claude] Stream error event:', error);
+      console.error('[Claude] Error name:', error.name);
+      console.error('[Claude] Error message:', error.message);
+      console.error('[Claude] Error code:', error.code);
+      console.error('[Claude] Error stack:', error.stack);
       res.write(`data: ${JSON.stringify({ error: error.message || 'Stream error' })}\n\n`);
       res.end();
     });
 
   } catch (error) {
+    console.error('[Claude] Outer catch error:', error);
     res.status(500).json({ error: 'Failed to process AI request', details: error.message });
   }
 });
