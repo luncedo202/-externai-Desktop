@@ -193,84 +193,103 @@ async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null
     let buffer = ''; // Buffer for incomplete SSE lines
     let streamDone = false;
 
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        // Process any remaining buffer before exiting
-        if (buffer.trim()) {
-          console.log('[ClaudeService] Processing remaining buffer:', buffer.length, 'chars');
-        }
-        break;
-      }
-
-      // Add new data to buffer
-      // Use decoder with stream: true to handle multi-byte characters split across chunks
-      buffer += decoder.decode(value, { stream: true });
-
-      // Robustly handle lines
-      // We look for lines starting with "data: " and ignore anything else (like raw headers)
-      let newlineIndex;
-      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.slice(0, newlineIndex).trim();
-        buffer = buffer.slice(newlineIndex + 1);
-
-        if (!line) continue;
-
-        // CRITICAL FIX: Ignore any line that doesn't strictly start with "data: "
-        // This filters out weird raw HTTP headers or binary garbage if the backend misbehaves
-        if (!line.startsWith('data: ')) {
-          if (line.includes('HTTP/1.1') || line.includes('Content-Type')) {
-            console.warn('[ClaudeService] Ignoring raw header line:', line);
-          }
-          continue;
-        }
-        // Strictly remove 'data: ' prefix
-        const jsonStr = line.substring(6);
-        if (!jsonStr) continue;
-
+    try {
+      while (true) {
+        let readResult;
         try {
-          const data = JSON.parse(jsonStr);
+          readResult = await reader.read();
+        } catch (readError) {
+          console.error('[ClaudeService] Error reading stream:', readError);
+          throw new Error(`Stream read error: ${readError.message}`);
+        }
 
-          // Handle Anthropic API format - content_block_delta contains the text
-          if (data.type === 'content_block_delta' && data.delta?.text) {
-            const chunkText = data.delta.text;
-            fullText += chunkText;
-            if (onChunk) {
-              onChunk(chunkText, fullText);
+        const { done, value } = readResult;
+
+        if (done) {
+          // Process any remaining buffer before exiting
+          if (buffer.trim()) {
+            console.log('[ClaudeService] Processing remaining buffer:', buffer.length, 'chars');
+          }
+          break;
+        }
+
+        // Add new data to buffer
+        // Use decoder with stream: true to handle multi-byte characters split across chunks
+        buffer += decoder.decode(value, { stream: true });
+
+        // Robustly handle lines
+        // We look for lines starting with "data: " and ignore anything else (like raw headers)
+        let newlineIndex;
+        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (!line) continue;
+
+          // CRITICAL FIX: Ignore any line that doesn't strictly start with "data: "
+          // This filters out weird raw HTTP headers or binary garbage if the backend misbehaves
+          if (!line.startsWith('data: ')) {
+            if (line.includes('HTTP/1.1') || line.includes('Content-Type')) {
+              console.warn('[ClaudeService] Ignoring raw header line:', line);
             }
-          } else if (data.delta?.text) {
-            // Fallback for other formats
-            const chunkText = data.delta.text;
-            fullText += chunkText;
-            if (onChunk) {
-              onChunk(chunkText, fullText);
+            continue;
+          }
+          // Strictly remove 'data: ' prefix
+          const jsonStr = line.substring(6);
+          if (!jsonStr) continue;
+
+          try {
+            const data = JSON.parse(jsonStr);
+
+            // Handle Anthropic API format - content_block_delta contains the text
+            if (data.type === 'content_block_delta' && data.delta?.text) {
+              const chunkText = data.delta.text;
+              fullText += chunkText;
+              if (onChunk) {
+                onChunk(chunkText, fullText);
+              }
+            } else if (data.delta?.text) {
+              // Fallback for other formats
+              const chunkText = data.delta.text;
+              fullText += chunkText;
+              if (onChunk) {
+                onChunk(chunkText, fullText);
+              }
             }
-          }
 
-          // Mark stream as done but continue processing remaining chunks
-          if (data.done || data.type === 'message_stop') {
-            console.log('[ClaudeService] Received done signal. Current length:', fullText.length);
-            streamDone = true;
-          }
+            // Mark stream as done but continue processing remaining chunks
+            if (data.done || data.type === 'message_stop') {
+              console.log('[ClaudeService] Received done signal. Current length:', fullText.length);
+              streamDone = true;
+            }
 
-          // Handle errors in stream
-          if (data.error) {
-            throw new Error(data.error);
+            // Handle errors in stream
+            if (data.error) {
+              console.error('[ClaudeService] Stream data error:', data.error);
+              throw new Error(data.error);
+            }
+          } catch (e) {
+            // Only skip JSON parse errors, re-throw actual errors
+            if (e.message && !e.message.includes('JSON') && !e.message.includes('Unexpected')) {
+              console.error('[ClaudeService] Non-JSON error in stream:', e);
+              throw e;
+            }
+            // Log parse errors for debugging
+            console.warn('[ClaudeService] JSON parse warning:', jsonStr.substring(0, 50));
+            console.warn('[ClaudeService] Parse error:', e.message);
           }
-        } catch (e) {
-          // Only skip JSON parse errors, re-throw actual errors
-          if (e.message && !e.message.includes('JSON') && !e.message.includes('Unexpected')) {
-            throw e;
-          }
-          // Log parse errors for debugging
-          console.warn('[ClaudeService] JSON parse warning:', jsonStr.substring(0, 50));
         }
       }
-    }
 
-    console.log('[ClaudeService] Stream finished. Total length:', fullText.length);
-    return { success: true, message: fullText };
+      console.log('[ClaudeService] Stream finished. Total length:', fullText.length);
+      return { success: true, message: fullText };
+    } catch (streamError) {
+      console.error('[ClaudeService] Stream processing error:', streamError);
+      console.error('[ClaudeService] Stream error name:', streamError.name);
+      console.error('[ClaudeService] Stream error message:', streamError.message);
+      console.error('[ClaudeService] Stream error stack:', streamError.stack);
+      throw streamError;
+    }
   } catch (error) {
     console.error('[ClaudeService] Stream error:', error);
     throw error;
