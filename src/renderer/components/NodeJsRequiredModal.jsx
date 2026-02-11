@@ -1,7 +1,22 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './NodeJsRequiredModal.css';
 
 function NodeJsRequiredModal({ onDownload, onDismiss }) {
+    const [countdown, setCountdown] = useState(10);
+
+    useEffect(() => {
+        if (countdown <= 0) {
+            onDismiss();
+            return;
+        }
+
+        const timer = setInterval(() => {
+            setCountdown(prev => prev - 1);
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [countdown, onDismiss]);
+
     return (
         <div className="nodejs-modal-overlay">
             <div className="nodejs-modal">
@@ -22,8 +37,8 @@ function NodeJsRequiredModal({ onDownload, onDismiss }) {
                 <h2>Node.js Required</h2>
 
                 <p className="nodejs-modal-description">
-                    ExternAI requires <strong>Node.js</strong> to run terminal commands and install dependencies.
-                    Node.js is not currently installed on your system.
+                    ExternAI requires <strong>Node.js</strong> to run terminal commands and install web apps.
+                    Node.js is not currently detected in your system path.
                 </p>
 
                 <div className="nodejs-modal-features">
@@ -39,14 +54,7 @@ function NodeJsRequiredModal({ onDownload, onDismiss }) {
                             <circle cx="10" cy="10" r="9" stroke="#68A063" strokeWidth="2" />
                             <path d="M6 10L9 13L14 7" stroke="#68A063" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        <span>Install project dependencies</span>
-                    </div>
-                    <div className="nodejs-feature">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                            <circle cx="10" cy="10" r="9" stroke="#68A063" strokeWidth="2" />
-                            <path d="M6 10L9 13L14 7" stroke="#68A063" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <span>Build and run applications</span>
+                        <span>Install dependencies</span>
                     </div>
                 </div>
 
@@ -59,12 +67,12 @@ function NodeJsRequiredModal({ onDownload, onDismiss }) {
                         Download Node.js Now
                     </button>
                     <button className="nodejs-skip-btn" onClick={onDismiss}>
-                        Skip for now
+                        Skip (Closing in {countdown}s...)
                     </button>
                 </div>
 
                 <p className="nodejs-modal-note">
-                    Note: If you skip, some features may not work until Node.js is installed.
+                    This reminder will only shown once. If you skip, some features may be limited.
                 </p>
             </div>
         </div>
