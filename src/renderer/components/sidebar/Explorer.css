@@ -1,11 +1,14 @@
+/* ─── Explorer Container ─── */
 .explorer {
   display: flex;
   flex-direction: column;
   height: 100%;
+  user-select: none;
 }
 
+/* ─── Header ─── */
 .explorer-header {
-  padding: 10px 16px;
+  padding: 12px 16px 8px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -17,93 +20,287 @@
 }
 
 .explorer-title {
-  letter-spacing: 0.5px;
-  opacity: 0.8;
+  letter-spacing: 1.2px;
+  font-size: 10.5px;
+  opacity: 0.6;
+  font-weight: 700;
 }
 
 .explorer-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
 
 .action-btn {
   background: transparent;
   border: none;
   color: var(--vscode-fg);
-  opacity: 0.7;
+  opacity: 0;
   cursor: pointer;
   padding: 4px;
-  border-radius: 3px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
+}
+
+.explorer-header:hover .action-btn {
+  opacity: 0.6;
 }
 
 .action-btn:hover {
-  opacity: 1;
+  opacity: 1 !important;
   background: var(--vscode-hover);
 }
 
+/* ─── Content Area ─── */
 .explorer-content {
   flex: 1;
   overflow-y: auto;
-  padding-top: 4px;
+  overflow-x: hidden;
 }
 
+.explorer-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.explorer-content::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.explorer-content:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.explorer-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="light"] .explorer-content:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .explorer-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* ─── Empty State ─── */
 .explorer-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: 48px 24px;
   text-align: center;
   color: var(--vscode-fg);
-  opacity: 0.7;
+  opacity: 0.5;
   height: 100%;
+  gap: 4px;
+}
+
+.explorer-empty p {
+  font-size: 12px;
+  margin-bottom: 12px;
 }
 
 .explorer-open-btn {
-  margin-top: 16px;
-  padding: 8px 16px;
-  background: var(--vscode-focus);
-  color: white;
-  border: none;
-  border-radius: 3px;
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--vscode-fg);
+  border: 1px solid var(--vscode-border);
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 13px;
-  transition: opacity 0.2s;
+  font-size: 12px;
+  transition: all 0.15s ease;
+  letter-spacing: 0.3px;
 }
 
 .explorer-open-btn:hover {
+  background: var(--vscode-hover);
+  border-color: var(--vscode-fg);
+}
+
+/* ─── Workspace Folder Header ─── */
+.workspace-folder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.workspace-folder-header:hover {
+  background: var(--vscode-hover);
+}
+
+.workspace-folder-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vscode-fg);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.workspace-folder-title svg {
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+/* ─── Folder Tree ─── */
+.folder-tree {
+  padding-bottom: 24px;
+}
+
+/* ─── Tree Items ─── */
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: var(--vscode-fg);
+  font-size: 13px;
+  min-height: 22px;
+  transition: background-color 0.08s ease;
+  position: relative;
+}
+
+.tree-item:hover {
+  background: var(--vscode-hover);
+}
+
+.tree-item:active {
+  background: var(--vscode-active);
+}
+
+/* Indent guides */
+.tree-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--indent-guide-left, -999px);
+  width: 1px;
+  background: var(--vscode-border);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.folder-tree:hover .tree-item::before {
+  opacity: 0.4;
+}
+
+.tree-item-folder {
+  font-weight: 400;
+}
+
+.tree-item-folder .tree-label {
+  color: #e8e8e8;
+}
+
+.tree-item-file .tree-label {
+  color: #bcbcbc;
+}
+
+[data-theme="light"] .tree-item-folder .tree-label {
+  color: #1a1a1a;
+}
+
+[data-theme="light"] .tree-item-file .tree-label {
+  color: #4a4a4a;
+}
+
+/* ─── Tree Chevron ─── */
+.tree-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  opacity: 0.5;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.tree-item:hover .tree-chevron {
   opacity: 0.9;
 }
 
-.folder-tree {
-  padding-bottom: 20px;
+/* ─── Tree Icon ─── */
+.tree-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
 }
 
-/* Modal Styles */
+/* ─── Tree Label ─── */
+.tree-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+/* ─── New Folder Modal ─── */
 .new-folder-modal-overlay {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10;
+  animation: modalOverlayIn 0.15s ease;
+}
+
+@keyframes modalOverlayIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .new-folder-modal {
   background: var(--vscode-sidebar-bg);
-  border: 1px solid var(--vscode-focus);
+  border: 1px solid var(--vscode-border);
   padding: 16px;
-  border-radius: 4px;
-  width: 250px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  width: 260px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: modalSlideIn 0.15s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .new-folder-modal h3 {
@@ -115,17 +312,21 @@
 
 .new-folder-modal input {
   width: 100%;
-  padding: 6px;
-  background: var(--vscode-input-bg);
+  padding: 6px 8px;
+  background: var(--vscode-editor-bg);
   border: 1px solid var(--vscode-border);
   color: var(--vscode-fg);
-  border-radius: 2px;
+  border-radius: 4px;
   margin-bottom: 12px;
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
 }
 
 .new-folder-modal input:focus {
   border-color: var(--vscode-focus);
   outline: none;
+  box-shadow: 0 0 0 1px var(--vscode-focus);
 }
 
 .modal-actions {
@@ -135,11 +336,13 @@
 }
 
 .modal-actions button {
-  padding: 4px 10px;
-  border-radius: 2px;
+  padding: 5px 12px;
+  border-radius: 4px;
   font-size: 12px;
   cursor: pointer;
   border: 1px solid transparent;
+  font-family: inherit;
+  transition: all 0.12s ease;
 }
 
 .modal-actions button:first-child {
@@ -148,198 +351,108 @@
   border: 1px solid var(--vscode-border);
 }
 
+.modal-actions button:first-child:hover {
+  background: var(--vscode-hover);
+}
+
 .modal-actions button:last-child {
   background: var(--vscode-focus);
   color: white;
 }
 
-.tree-view {
-  user-select: none;
+.modal-actions button:last-child:hover {
+  opacity: 0.85;
 }
 
-.tree-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  cursor: pointer;
-  color: var(--vscode-fg);
-  font-size: 13px;
-  min-height: 24px;
-  transition: background-color 0.15s ease;
+.modal-actions button:last-child:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.tree-item:hover {
-  background: var(--vscode-hover);
-}
-
-.tree-item-folder {
-  font-weight: 500;
-}
-
-.tree-chevron {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  opacity: 0.7;
-  transition: transform 0.15s ease;
-}
-
-.tree-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-}
-
-.tree-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #cccccc;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.tree-item-folder .tree-label {
-  color: #e8e8e8;
-}
-
-[data-theme="light"] .tree-label {
-  color: #3b3b3b;
-}
-
-[data-theme="light"] .tree-item-folder .tree-label {
-  color: #1a1a1a;
-}
-
-.workspace-folder-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 8px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--vscode-border);
-}
-
-.workspace-folder-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--vscode-fg);
-  font-weight: 500;
-  font-size: 13px;
-}
-
-.new-folder-button {
-  background: transparent;
-  border: none;
-  color: var(--vscode-fg);
-  opacity: 0.7;
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 3px;
-}
-
-.new-folder-button:hover {
-  opacity: 1;
-  background: var(--vscode-hover);
-}
-
+/* ─── Inline New Folder Input ─── */
 .new-folder-input-container {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 2px 8px;
   background: var(--vscode-hover);
 }
 
 .new-folder-input {
   flex: 1;
-  background: var(--vscode-input-bg);
+  background: var(--vscode-editor-bg);
   border: 1px solid var(--vscode-focus);
   color: var(--vscode-fg);
-  padding: 4px 6px;
+  padding: 3px 6px;
   font-size: 13px;
-  border-radius: 2px;
+  border-radius: 3px;
   outline: none;
   font-family: inherit;
+  box-shadow: 0 0 0 1px var(--vscode-focus);
 }
 
 .new-folder-input::placeholder {
-  color: var(--vscode-placeholder);
-  opacity: 0.6;
+  color: var(--vscode-fg);
+  opacity: 0.35;
 }
 
-/* Refresh Guide Styles */
+/* ─── Refresh Badge ─── */
 .refresh-badge {
-  background: var(--vscode-focus);
+  background: #0078d4;
   color: white;
-  font-size: 9px;
+  font-size: 8px;
   padding: 1px 4px;
   border-radius: 3px;
   margin-left: 4px;
   font-weight: 700;
   text-transform: uppercase;
-  animation: explorerPulse 2s infinite;
+  letter-spacing: 0.5px;
+  animation: badgePulse 2s ease-in-out infinite;
 }
 
+/* ─── Refresh Tip ─── */
 .explorer-refresh-tip {
-  margin: 0 16px 12px 16px;
-  padding: 8px 10px;
-  background: rgba(0, 120, 212, 0.1);
-  border-left: 3px solid var(--vscode-focus);
+  margin: 4px 12px 8px 12px;
+  padding: 6px 10px;
+  background: rgba(0, 120, 212, 0.08);
+  border-left: 2px solid #0078d4;
   border-radius: 0 4px 4px 0;
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   color: var(--vscode-fg);
+  opacity: 0.8;
   line-height: 1.4;
-  animation: explorerFadeIn 0.5s ease-out;
+  animation: tipFadeIn 0.3s ease-out;
 }
 
 .explorer-refresh-tip .tip-icon {
-  color: var(--vscode-focus);
-  margin-top: 1px;
+  color: #0078d4;
   flex-shrink: 0;
 }
 
-@keyframes explorerPulse {
-  0% {
-    transform: scale(1);
+/* ─── Animations ─── */
+@keyframes badgePulse {
+
+  0%,
+  100% {
     opacity: 1;
   }
 
   50% {
-    transform: scale(1.05);
-    opacity: 0.8;
-  }
-
-  100% {
-    transform: scale(1);
-    opacity: 1;
+    opacity: 0.6;
   }
 }
 
-@keyframes explorerFadeIn {
+@keyframes tipFadeIn {
   from {
     opacity: 0;
-    transform: translateY(-5px);
+    transform: translateY(-4px);
   }
 
   to {
-    opacity: 1;
+    opacity: 0.8;
     transform: translateY(0);
   }
 }

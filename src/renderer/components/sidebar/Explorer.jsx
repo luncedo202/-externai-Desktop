@@ -408,14 +408,7 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
         )}
         {folderTree ? (
           <div className="folder-tree">
-            {/* Workspace folder header */}
-            <div className="workspace-folder-header">
-              <div className="workspace-folder-title">
-                <FiFolder size={16} style={{ color: '#dcb67a' }} />
-                <span>{folderTree.name || workspaceFolder.split('/').pop()}</span>
-              </div>
-            </div>
-            {/* Render root level files directly for now to keep it simple */}
+            {/* Render root level files directly */}
             {folderTree.items && folderTree.items.map((item) => renderTreeItem(item, 0))}
             {(!folderTree.items || folderTree.items.length === 0) && (
               <div style={{ padding: '20px', color: '#888', fontSize: '12px', textAlign: 'center' }}>
