@@ -1,10 +1,16 @@
 import React from 'react';
 import './NodeJsRequiredModal.css';
 
-function NodeJsRequiredModal({ onDownload }) {
+function NodeJsRequiredModal({ onDownload, onDismiss }) {
     return (
         <div className="nodejs-modal-overlay">
             <div className="nodejs-modal">
+                <button className="nodejs-modal-close" onClick={onDismiss} aria-label="Dismiss">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
                 <div className="nodejs-modal-icon">
                     <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
                         <circle cx="32" cy="32" r="30" fill="#68A063" opacity="0.1" />
@@ -52,10 +58,13 @@ function NodeJsRequiredModal({ onDownload }) {
                         </svg>
                         Download Node.js Now
                     </button>
+                    <button className="nodejs-skip-btn" onClick={onDismiss}>
+                        Skip for now
+                    </button>
                 </div>
 
                 <p className="nodejs-modal-note">
-                    The application will close after you click download. Please install Node.js and restart ExternAI.
+                    Note: If you skip, some features may not work until Node.js is installed.
                 </p>
             </div>
         </div>

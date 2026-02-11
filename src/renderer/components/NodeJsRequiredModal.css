@@ -94,9 +94,33 @@
     flex-shrink: 0;
 }
 
+.nodejs-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    color: var(--vscode-fg);
+    opacity: 0.5;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.nodejs-modal-close:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.1);
+}
+
 .nodejs-modal-actions {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
     margin-bottom: 20px;
 }
 
@@ -114,6 +138,23 @@
     gap: 8px;
     transition: all 0.2s ease;
     box-shadow: 0 4px 12px rgba(104, 160, 99, 0.3);
+    width: 100%;
+    justify-content: center;
+}
+
+.nodejs-skip-btn {
+    background: transparent;
+    color: var(--vscode-fg);
+    opacity: 0.6;
+    border: none;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+    transition: all 0.2s ease;
+}
+
+.nodejs-skip-btn:hover {
+    opacity: 1;
 }
 
 .nodejs-download-btn:hover {

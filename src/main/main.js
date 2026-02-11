@@ -241,16 +241,50 @@ ipcMain.handle('system:checkNodeJs', async () => {
   const { promisify } = require('util');
   const execAsync = promisify(exec);
 
+  // First check if user has already dismissed this modal permanently
+  const hasBeenDismissed = store.get('nodejs_modal_dismissed', false);
+  if (hasBeenDismissed) {
+    return { installed: true }; // Treat as installed if dismissed
+  }
+
+  // Setup the same PATH logic as terminal for detection
+  const envPath = process.env.PATH || '';
+  const isWindows = process.platform === 'win32';
+  const pathSeparator = isWindows ? ';' : ':';
+  const additionalPaths = isWindows ? [
+    'C:\\Program Files\\nodejs',
+    'C:\\Program Files (x86)\\nodejs',
+    `${process.env.APPDATA}\\npm`,
+    'C:\\Windows\\System32',
+    'C:\\Windows',
+  ] : [
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin'
+  ];
+
+  const pathParts = envPath.split(pathSeparator);
+  const missingPaths = additionalPaths.filter(p => !pathParts.includes(p));
+  const fullPath = [...missingPaths, envPath].filter(Boolean).join(pathSeparator);
+
   try {
-    // Check for node
-    await execAsync('node --version');
-    // Check for npm
-    await execAsync('npm --version');
+    // Check for node using the enhanced PATH
+    await execAsync('node --version', { env: { ...process.env, PATH: fullPath } });
+    // Check for npm using the enhanced PATH
+    await execAsync('npm --version', { env: { ...process.env, PATH: fullPath } });
     return { installed: true };
   } catch (error) {
-    console.log('[System] Node.js not detected:', error.message);
+    console.log('[System] Node.js not detected with enhanced PATH:', error.message);
     return { installed: false };
   }
+});
+
+ipcMain.handle('system:dismissNodeJsModal', async () => {
+  store.set('nodejs_modal_dismissed', true);
+  return { success: true };
 });
 
 ipcMain.handle('system:downloadNodeJs', async () => {

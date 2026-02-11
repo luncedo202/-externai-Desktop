@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   system: {
     checkNodeJs: () => ipcRenderer.invoke('system:checkNodeJs'),
     downloadNodeJs: () => ipcRenderer.invoke('system:downloadNodeJs'),
+    dismissNodeJsModal: () => ipcRenderer.invoke('system:dismissNodeJsModal'),
     openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   },
 

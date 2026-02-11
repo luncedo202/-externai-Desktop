@@ -494,6 +494,10 @@ function App() {
     return (
       <NodeJsRequiredModal
         onDownload={() => window.electronAPI.system.downloadNodeJs()}
+        onDismiss={async () => {
+          await window.electronAPI.system.dismissNodeJsModal();
+          setIsNodeInstalled(true);
+        }}
       />
     );
   }
