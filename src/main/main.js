@@ -71,15 +71,37 @@ async function createWindow() {
   // Set Content Security Policy
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     const isDev = process.env.NODE_ENV === 'development';
+
+    // GA4 domains needed:
+    //  - script:  googletagmanager.com (loader) + google-analytics.com + ssl.google-analytics.com + analytics.google.com
+    //  - connect: all of the above + region1.google-analytics.com + stats.g.doubleclick.net (event collection)
+    const gaScriptSrc = 'https://www.googletagmanager.com https://www.google-analytics.com https://ssl.google-analytics.com https://analytics.google.com';
+    const gaConnectSrc = 'https://www.google-analytics.com https://ssl.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net';
+    const firebaseSrc = 'https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://*.cloudfunctions.net https://*.a.run.app';
+
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': isDev ? [
-          // Development: Allow Vite HMR, Monaco CDN, Firebase Auth, Cloud Run backend, Railway backend, Google Analytics
-          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* https://cdn.jsdelivr.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com http://localhost:* ws://localhost:* https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://*.up.railway.app https://*.a.run.app https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com; worker-src 'self' blob: https://cdn.jsdelivr.net;"
+          // Development — relaxed for Vite HMR + eval (Monaco needs unsafe-eval)
+          `default-src 'self'; ` +
+          `script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* https://cdn.jsdelivr.net ${gaScriptSrc}; ` +
+          `style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; ` +
+          `style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; ` +
+          `img-src 'self' data: https:; ` +
+          `font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com; ` +
+          `connect-src 'self' http://localhost:* ws://localhost:* https://cdn.jsdelivr.net ${gaConnectSrc} ${firebaseSrc} https://*.up.railway.app; ` +
+          `worker-src 'self' blob: https://cdn.jsdelivr.net;`
         ] : [
-          // Production: Strict CSP, allow Monaco CDN, Firebase Auth, Cloud Run backend, Railway backend, Google Analytics
-          "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://api.anthropic.com https://cdn.jsdelivr.net https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://*.up.railway.app https://*.a.run.app https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com; worker-src 'self' blob: https://cdn.jsdelivr.net;"
+          // Production — strict, no eval
+          `default-src 'self'; ` +
+          `script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net ${gaScriptSrc}; ` +
+          `style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; ` +
+          `style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; ` +
+          `img-src 'self' data: https:; ` +
+          `font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com; ` +
+          `connect-src 'self' https://cdn.jsdelivr.net ${gaConnectSrc} ${firebaseSrc} https://*.up.railway.app; ` +
+          `worker-src 'self' blob: https://cdn.jsdelivr.net;`
         ]
       }
     });

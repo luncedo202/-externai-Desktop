@@ -22,7 +22,8 @@
         "rewrites": [
             {
                 "source": "/app/**",
-                "function": "serveApp"
+                "function": "serveApp",
+                "region": "us-central1"
             }
         ]
     },

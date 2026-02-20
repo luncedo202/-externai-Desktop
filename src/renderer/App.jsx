@@ -11,6 +11,7 @@ import FirebaseService from './services/FirebaseService';
 import AnalyticsService from './services/AnalyticsService';
 import PricingPlans from './components/PricingPlans';
 import NodeJsRequiredModal from './components/NodeJsRequiredModal';
+import PublishModal from './components/PublishModal';
 import './App.css';
 
 function App() {
@@ -45,6 +46,7 @@ function App() {
   const [debugLogs, setDebugLogs] = useState([]);
   const [hasAiResponded, setHasAiResponded] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const [devServerUrl, setDevServerUrl] = useState(null); // Track active dev server URL
   const [isNodeInstalled, setIsNodeInstalled] = useState(true);
   const aiAssistantRef = useRef(null);
@@ -272,22 +274,9 @@ function App() {
     );
   };
 
-  // Handler for Publish button - tells AI to deploy to Vercel
+  // Handler for Publish button - opens publish modal
   const handlePublishRequest = () => {
-    if (!workspaceFolder) {
-      console.log('No workspace folder opened');
-      return;
-    }
-
-    if (!aiAssistantRef.current) {
-      console.log('AI Assistant not available');
-      return;
-    }
-
-    // Send instruction to AI to deploy the project
-    aiAssistantRef.current.sendMessage(
-      'Please deploy this project to Vercel. Steps: 1) Install vercel CLI globally (npm i -g vercel), 2) Run "vercel --prod" (the user will be prompted to login via browser if first time), 3) Provide me with the deployment URL when complete.'
-    );
+    setShowPublishModal(true);
   };
 
   const handleOpenFolder = async (folderPath) => {
@@ -591,6 +580,13 @@ function App() {
         <PricingPlans
           onClose={() => setShowPricing(false)}
           userEmail={currentUser?.email}
+        />
+      )}
+      {showPublishModal && (
+        <PublishModal
+          onClose={() => setShowPublishModal(false)}
+          workspaceFolder={workspaceFolder}
+          projectName={workspaceFolder ? workspaceFolder.split('/').pop() : 'My App'}
         />
       )}
     </div>

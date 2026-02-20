@@ -1,16 +1,18 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Published apps storage
+
+    // Published app files — publicly readable, write only via Admin SDK (Cloud Functions)
     match /published_apps/{appId}/{allPaths=**} {
-      // Anyone can read published app files
+      // Anyone on the internet can read a published app's files
       allow read: if true;
-      
-      // Only Cloud Functions can write (handled via Admin SDK)
+
+      // Only Cloud Functions (Admin SDK) can write — clients cannot write directly
+      // The Admin SDK bypasses these rules entirely, so this is a safety net
       allow write: if false;
     }
-    
-    // Default deny all other paths
+
+    // Deny everything else
     match /{allPaths=**} {
       allow read, write: if false;
     }
