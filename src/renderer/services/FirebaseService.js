@@ -1,19 +1,20 @@
 import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  createUserWithEmailAndPassword, 
+import { getAnalytics, isSupported } from 'firebase/analytics';
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc, 
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
   deleteDoc,
   query,
   where,
@@ -32,7 +33,8 @@ const firebaseConfig = {
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_GA_MEASUREMENT_ID  // Required for Firebase Analytics
 };
 
 // Initialize Firebase
@@ -40,16 +42,29 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// Initialize Firebase Analytics (only where supported — not in SSR/Node)
+let analytics = null;
+isSupported().then(yes => {
+  if (yes) {
+    analytics = getAnalytics(app);
+    console.log('[Firebase] Analytics initialized:', import.meta.env.VITE_GA_MEASUREMENT_ID);
+  } else {
+    console.warn('[Firebase] Analytics not supported in this environment.');
+  }
+}).catch(err => {
+  console.warn('[Firebase] Analytics init error:', err.message);
+});
+
 // Sign up new user
 export const signUp = async (email, password, name) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    
+
     // Update profile with name
     await updateProfile(userCredential.user, {
       displayName: name
     });
-    
+
     return {
       success: true,
       user: {
@@ -71,7 +86,7 @@ export const signUp = async (email, password, name) => {
 export const signIn = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    
+
     return {
       success: true,
       user: {
@@ -109,7 +124,7 @@ export const getIdToken = async () => {
   if (!user) {
     throw new Error('No user logged in');
   }
-  
+
   try {
     const token = await user.getIdToken();
     return token;
@@ -176,6 +191,9 @@ const getErrorMessage = (errorCode) => {
 // Get Firebase app instance (for use with other Firebase services)
 export const getApp = () => app;
 
+// Get Firebase Analytics instance
+export const getAnalyticsInstance = () => analytics;
+
 export default {
   signUp,
   signIn,
@@ -184,5 +202,6 @@ export default {
   onAuthChange,
   getCurrentUser,
   getApp,
+  getAnalyticsInstance,
   db
 };

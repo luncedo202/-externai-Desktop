@@ -77,7 +77,7 @@ async function createWindow() {
     //  - connect: all of the above + region1.google-analytics.com + stats.g.doubleclick.net (event collection)
     const gaScriptSrc = 'https://www.googletagmanager.com https://www.google-analytics.com https://ssl.google-analytics.com https://analytics.google.com';
     const gaConnectSrc = 'https://www.google-analytics.com https://ssl.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net';
-    const firebaseSrc = 'https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://*.cloudfunctions.net https://*.a.run.app';
+    const firebaseSrc = 'https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://*.cloudfunctions.net https://*.a.run.app https://firebase.googleapis.com https://firebaseinstallations.googleapis.com';
 
     callback({
       responseHeaders: {

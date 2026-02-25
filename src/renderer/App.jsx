@@ -331,14 +331,16 @@ function App() {
     console.log('🌐 Dev server detected:', url);
     setDevServerUrl(url);
 
-    // Auto-open in external browser
-    setTimeout(async () => {
-      try {
-        await window.electronAPI.shell.openExternal(url);
-      } catch (err) {
-        console.error('Failed to open browser:', err);
-      }
-    }, 1500);
+    // Only auto-open browser when a real URL is provided (not null dismiss)
+    if (url) {
+      setTimeout(async () => {
+        try {
+          await window.electronAPI.shell.openExternal(url);
+        } catch (err) {
+          console.error('Failed to open browser:', err);
+        }
+      }, 1500);
+    }
   };
 
   // Handler for file updates - auto-opens browser if dev server is running

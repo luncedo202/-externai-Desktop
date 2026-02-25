@@ -2012,6 +2012,11 @@ Could you provide more details about what you'd like to build?`;
 
               console.log(' Opening browser at:', url);
 
+              // ✅ Set devServerUrl in App.jsx → shows the banner above input
+              if (onDevServerDetected) {
+                onDevServerDetected(url);
+              }
+
               // Open in default browser
               try {
                 await window.electronAPI.shell.openExternal(url);
