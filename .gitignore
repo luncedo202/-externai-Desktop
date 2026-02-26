@@ -4,14 +4,18 @@ build/
 bundled-node/
 *.log
 .DS_Store
+
+# Environment files — NEVER commit secrets!
 .env
+.env.*
 .env.local
+.env.production
+.env.staging
 .env*.local
 hosting/.env
 hosting/node_modules/
 
-# Sensitive - Never commit!
-.env
+# Sensitive — Never commit!
 *.key
 secrets/
 service-account-key.json
