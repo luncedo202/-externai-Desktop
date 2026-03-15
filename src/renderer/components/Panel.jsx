@@ -4,8 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { FiX } from 'react-icons/fi';
 import '@xterm/xterm/css/xterm.css';
 import OutputPanel from './panels/OutputPanel';
-import ProblemsPanel from './panels/ProblemsPanel';
-import DebugConsole from './panels/DebugConsole';
+import CommandExplanationService from '../services/CommandExplanationService';
 import './Panel.css';
 
 const Panel = forwardRef(({ 
@@ -14,23 +13,28 @@ const Panel = forwardRef(({
   onCloseTerminal,
   workspaceFolder,
   outputLogs = [],
-  diagnostics = [],
   debugLogs = [],
   onClearOutput,
-  onClearDiagnostics,
   onClearDebug,
   theme,
   onUpdateTerminalStatus,
   onTerminalOutput,
-  terminalRef
+  terminalRef,
+  visible
 }, ref) => {
   const [activeTab, setActiveTab] = useState('terminal');
-  const [activeTerminal, setActiveTerminal] = useState(null);
+  const [activeTerminal, setActiveTerminal] = useState(terminals.length > 0 ? terminals[0].id : null);
+  const [terminalViewMode, setTerminalViewMode] = useState({}); // 'output' or 'explanation' per terminal
+  const [terminalExplanations, setTerminalExplanations] = useState({}); // Store explanations per terminal
+  const [loadingExplanation, setLoadingExplanation] = useState({}); // Loading state per terminal
   const terminalRefsMap = useRef({});
   const terminalInstances = useRef({});
   const fitAddons = useRef({});
   const backendTerminalIds = useRef({}); // Store backend terminal IDs
   const terminalOutputBuffers = useRef({}); // Store output per terminal
+  const lastCommands = useRef({}); // Store last command per terminal
+  const commandStartTime = useRef({}); // Track when command started
+  const commandExplained = useRef({}); // Track if current command was already explained
 
   // Expose executeCommand method via ref for AI to use
   useImperativeHandle(ref, () => ({
@@ -227,6 +231,24 @@ const Panel = forwardRef(({
         
         // Handle terminal input from user
         term.onData((data) => {
+          // Track command input (detect Enter key to capture command)
+          if (data === '\r' || data === '\n') {
+            // Get the current line as the command
+            const buffer = term.buffer.active;
+            const cursorY = buffer.cursorY;
+            const line = buffer.getLine(cursorY);
+            if (line) {
+              const commandText = line.translateToString(true).trim();
+              // Remove prompt from command (e.g., "$ npm install" -> "npm install")
+              const cleanCommand = commandText.replace(/^.*[$%>#]\s*/, '').trim();
+              if (cleanCommand && !cleanCommand.match(/^[\s]*$/)) {
+                lastCommands.current[terminalId] = cleanCommand;
+                commandStartTime.current[terminalId] = Date.now();
+                commandExplained.current[terminalId] = false; // Reset for new command
+                console.log('[Panel] Command tracked:', cleanCommand);
+              }
+            }
+          }
           window.electronAPI.terminal.write(result.terminalId, data);
         });
 
@@ -258,6 +280,29 @@ const Panel = forwardRef(({
                 onUpdateTerminalStatus(terminalId, 'error');
               } else if (hasSuccess) {
                 onUpdateTerminalStatus(terminalId, 'success');
+                
+                // Generate explanation for successful command
+                const command = lastCommands.current[terminalId];
+                const timeSinceCommand = Date.now() - (commandStartTime.current[terminalId] || 0);
+                
+                // Only explain if we have a recent command (within last 30 seconds) and haven't already explained it
+                if (command && timeSinceCommand < 30000 && !commandExplained.current[terminalId]) {
+                  commandExplained.current[terminalId] = true; // Mark as explained immediately to prevent duplicates
+                  console.log('[Panel] Generating explanation for:', command);
+                  setLoadingExplanation(prev => ({ ...prev, [terminalId]: true }));
+                  
+                  CommandExplanationService.explainCommand(
+                    command,
+                    terminalOutputBuffers.current[terminalId] || ''
+                  ).then(explanation => {
+                    setTerminalExplanations(prev => ({ ...prev, [terminalId]: explanation }));
+                    setTerminalViewMode(prev => ({ ...prev, [terminalId]: 'explanation' }));
+                    setLoadingExplanation(prev => ({ ...prev, [terminalId]: false }));
+                  }).catch(error => {
+                    console.error('[Panel] Error generating explanation:', error);
+                    setLoadingExplanation(prev => ({ ...prev, [terminalId]: false }));
+                  });
+                }
               }
             }
           }
@@ -279,7 +324,37 @@ const Panel = forwardRef(({
     if (activeTerminal && terminalRefsMap.current[activeTerminal]) {
       initTerminal(activeTerminal);
     }
+
+    // Also init any terminals that haven't been initialized yet
+    terminals.forEach(t => {
+      if (terminalRefsMap.current[t.id] && !terminalInstances.current[t.id]) {
+        initTerminal(t.id);
+      }
+    });
   }, [activeTerminal, workspaceFolder, theme, onTerminalOutput, onUpdateTerminalStatus]);
+
+  // Re-fit all terminals when panel becomes visible
+  useEffect(() => {
+    if (visible) {
+      // Small delay to allow the container to get its actual dimensions
+      const timer = setTimeout(() => {
+        Object.keys(fitAddons.current).forEach(id => {
+          try {
+            fitAddons.current[id]?.fit();
+            // Also update backend terminal size
+            const term = terminalInstances.current[id];
+            const backendId = backendTerminalIds.current[id];
+            if (term && backendId) {
+              window.electronAPI.terminal.resize(backendId, term.cols, term.rows);
+            }
+          } catch (e) {
+            // ignore fit errors
+          }
+        });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [visible]);
 
   return (
     <div className="panel">
@@ -291,24 +366,6 @@ const Panel = forwardRef(({
           >
             Terminal
           </button>
-          <button
-            className={`panel-tab ${activeTab === 'output' ? 'active' : ''}`}
-            onClick={() => setActiveTab('output')}
-          >
-            Output
-          </button>
-          <button
-            className={`panel-tab ${activeTab === 'problems' ? 'active' : ''}`}
-            onClick={() => setActiveTab('problems')}
-          >
-            Problems
-          </button>
-          <button
-            className={`panel-tab ${activeTab === 'debug' ? 'active' : ''}`}
-            onClick={() => setActiveTab('debug')}
-          >
-            Debug Console
-          </button>
         </div>
         {activeTab === 'terminal' && (
           <div className="terminal-tabs">
@@ -316,7 +373,11 @@ const Panel = forwardRef(({
               <button
                 key={terminal.id}
                 className={`terminal-tab ${activeTerminal === terminal.id ? 'active' : ''} ${terminal.status || ''}`}
-                onClick={() => setActiveTerminal(terminal.id)}
+                onClick={() => {
+                  if (activeTerminal !== terminal.id) {
+                    setActiveTerminal(terminal.id);
+                  }
+                }}
               >
                 {terminal.status && (
                   <span className={`terminal-status-dot ${terminal.status}`} />
@@ -341,17 +402,74 @@ const Panel = forwardRef(({
       </div>
       <div className="panel-content">
         {activeTab === 'terminal' && terminals.length > 0 && (
-          <div className="terminals-container">
-            {terminals.map((terminal) => (
-              <div
-                key={terminal.id}
-                ref={(el) => (terminalRefsMap.current[terminal.id] = el)}
-                className={`terminal-instance ${activeTerminal === terminal.id ? 'active' : 'hidden'}`}
-                data-terminal-id={backendTerminalIds.current[terminal.id] || ''}
-                data-id={terminal.id}
-              />
-            ))}
-          </div>
+          <>
+            {/* Terminal view mode tabs (Explanation / Output) */}
+            {activeTerminal && (
+              <div className="terminal-view-tabs">
+                <button
+                  className={`terminal-view-tab ${(terminalViewMode[activeTerminal] || 'explanation') === 'explanation' ? 'active' : ''}`}
+                  onClick={() => setTerminalViewMode(prev => ({ ...prev, [activeTerminal]: 'explanation' }))}
+                >
+                  Explanation
+                </button>
+                <button
+                  className={`terminal-view-tab ${(terminalViewMode[activeTerminal] || 'explanation') === 'output' ? 'active' : ''}`}
+                  onClick={() => setTerminalViewMode(prev => ({ ...prev, [activeTerminal]: 'output' }))}
+                >
+                  Output
+                </button>
+              </div>
+            )}
+            
+            {/* Explanation view */}
+            {activeTerminal && (terminalViewMode[activeTerminal] || 'explanation') === 'explanation' && (
+              <div className="terminal-explanation-view">
+                <div className="terminal-explanation-content">
+                  {terminalExplanations[activeTerminal] ? (
+                    <>
+                      <div className="terminal-explanation-header">
+                        <span className="terminal-explanation-icon">💡</span>
+                        <span className="terminal-explanation-title">Plain English</span>
+                      </div>
+                      <div className="terminal-explanation-text">
+                        <span className="terminal-explanation-tick">✓</span>
+                        {terminalExplanations[activeTerminal].split(/(https?:\/\/[^\s)]+)/g).map((part, i) =>
+                          /^https?:\/\//.test(part) ? (
+                            <a key={i} href="#" className="terminal-explanation-link" onClick={(e) => { e.preventDefault(); window.electronAPI?.openExternal?.(part) || window.open(part, '_blank'); }}>{part}</a>
+                          ) : part
+                        )}
+                      </div>
+                      {lastCommands.current[activeTerminal] && (
+                        <div className="terminal-explanation-command">
+                          <strong>Command:</strong> <code>{lastCommands.current[activeTerminal]}</code>
+                        </div>
+                      )}
+                    </>
+                  ) : loadingExplanation[activeTerminal] ? (
+                    <div className="terminal-explanation-loading">
+                      <div className="spinner"></div>
+                      <span>Generating explanation...</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+            
+            {/* Terminal output view */}
+            <div className="terminals-container" style={{
+              display: (terminalViewMode[activeTerminal] === 'output') ? 'block' : 'none'
+            }}>
+              {terminals.map((terminal) => (
+                <div
+                  key={terminal.id}
+                  ref={(el) => (terminalRefsMap.current[terminal.id] = el)}
+                  className={`terminal-instance ${activeTerminal === terminal.id ? 'active' : 'hidden'}`}
+                  data-terminal-id={backendTerminalIds.current[terminal.id] || ''}
+                  data-id={terminal.id}
+                />
+              ))}
+            </div>
+          </>
         )}
         {activeTab === 'terminal' && terminals.length === 0 && (
           <div className="empty-panel">
@@ -360,15 +478,6 @@ const Panel = forwardRef(({
               New Terminal
             </button>
           </div>
-        )}
-        {activeTab === 'output' && (
-          <OutputPanel outputLogs={outputLogs} />
-        )}
-        {activeTab === 'problems' && (
-          <ProblemsPanel diagnostics={diagnostics} />
-        )}
-        {activeTab === 'debug' && (
-          <DebugConsole debugLogs={debugLogs} />
         )}
       </div>
     </div>

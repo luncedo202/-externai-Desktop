@@ -76,7 +76,7 @@ async function createWindow() {
     //  - script:  googletagmanager.com (loader) + google-analytics.com + ssl.google-analytics.com + analytics.google.com
     //  - connect: all of the above + region1.google-analytics.com + stats.g.doubleclick.net (event collection)
     const gaScriptSrc = 'https://www.googletagmanager.com https://www.google-analytics.com https://ssl.google-analytics.com https://analytics.google.com';
-    const gaConnectSrc = 'https://www.google-analytics.com https://ssl.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net';
+    const gaConnectSrc = 'https://www.google-analytics.com https://ssl.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://*.analytics.google.com https://*.googletagmanager.com';
     const firebaseSrc = 'https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://*.cloudfunctions.net https://*.a.run.app https://firebase.googleapis.com https://firebaseinstallations.googleapis.com';
 
     callback({
@@ -1340,6 +1340,56 @@ ipcMain.handle('auth:clearUser', async () => {
   } catch (error) {
     console.error('Error clearing user:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// OpenAI - File Explanation Service (via Firebase Cloud Function)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ipcMain.handle('openai:explain', async (event, { filePath, content, language }) => {
+  try {
+    // Get Firebase Cloud Function URL from environment
+    const FIREBASE_FUNCTION_URL = process.env.VITE_FIREBASE_FUNCTION_URL || process.env.FIREBASE_FUNCTION_URL;
+    
+    if (!FIREBASE_FUNCTION_URL) {
+      console.error('[OpenAI Explanation] Firebase Function URL not configured');
+      return { success: false, error: 'Service not configured' };
+    }
+
+    // Get user ID from store if available
+    const userId = store.get('user')?.uid || null;
+
+    // Call Firebase Cloud Function
+    const response = await fetch(`${FIREBASE_FUNCTION_URL}/api/openai/explain`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        filePath,
+        content,
+        language,
+        userId
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('[OpenAI Explanation] Cloud function error:', response.status, errorData);
+      return { success: false, error: errorData.error || 'Failed to generate explanation' };
+    }
+
+    const data = await response.json();
+    
+    if (data.success && data.explanation) {
+      return { success: true, explanation: data.explanation };
+    } else {
+      return { success: false, error: data.error || 'No explanation generated' };
+    }
+  } catch (error) {
+    console.error('[OpenAI Explanation] Error:', error);
+    return { success: false, error: error.message || 'Failed to connect to explanation service' };
   }
 });
 

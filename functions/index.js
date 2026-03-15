@@ -36,10 +36,12 @@ app.use('/api/', limiter);
 // Import routes
 const claudeRoutes = require('./routes/claude');
 const paymentRoutes = require('./routes/payment');
+const openaiRoutes = require('./routes/openai');
 
 // Apply routes
 app.use('/api/claude', claudeRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/openai', openaiRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {
@@ -55,7 +57,7 @@ exports.api = onRequest({
     memory: "512MiB",
     timeoutSeconds: 300, // Important for long AI responses
     region: "us-central1", // You can change this to your preferred region
-    secrets: ["ANTHROPIC_API_KEY"] // Add secrets here
+    secrets: ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"] // Add secrets here
 }, app);
 
 // Import and export publish functions

@@ -4,6 +4,12 @@
   box-sizing: border-box;
 }
 
+/* Prevent global reset from breaking Monaco editor internals */
+.monaco-editor * {
+  margin: unset;
+  padding: unset;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
@@ -26,7 +32,7 @@ code {
 /* VS Code Theme Colors - Dark Mode (Default) */
 :root {
   --vscode-bg: #1e1e1e;
-  --vscode-sidebar-bg: #252526;
+  --vscode-sidebar-bg: #181818;
   --vscode-activitybar-bg: #333333;
   --vscode-editor-bg: #1e1e1e;
   --vscode-panel-bg: #1e1e1e;
@@ -89,4 +95,13 @@ code {
 /* Selection */
 ::selection {
   background: var(--vscode-selection);
+}
+/* Monaco Editor Line Numbers Fix */
+.monaco-editor .margin,
+.monaco-editor .line-numbers {
+  color: #858585 !important;
+}
+
+.monaco-editor .margin-view-overlays {
+  width: auto !important;
 }

@@ -1,34 +1,60 @@
 .activity-bar {
-  width: 50px;
+  width: 64px;
   background: var(--vscode-activitybar-bg);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   border-right: 1px solid var(--vscode-border);
   padding: 10px 0;
+  overflow: hidden;
 }
 
 .activity-buttons,
 .activity-buttons-bottom {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 2px;
   align-items: center;
 }
 
+.activity-buttons {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  padding-bottom: 4px;
+}
+
+.activity-buttons::-webkit-scrollbar {
+  width: 0;
+}
+
 .activity-button {
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 52px;
   background: transparent;
   border: none;
   color: var(--vscode-fg);
   cursor: pointer;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: background 0.2s;
+  gap: 3px;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
   position: relative;
+  padding: 4px 2px;
+}
+
+.activity-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  opacity: 0.7;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: normal;
+  text-align: center;
 }
 
 [data-theme="light"] .activity-button {
@@ -39,8 +65,18 @@
   background: var(--vscode-hover);
 }
 
+.activity-button:hover .activity-label {
+  opacity: 1;
+}
+
 .activity-button.active {
-  background: var(--vscode-active);
+  background: rgba(74, 158, 255, 0.15);
+  color: #4a9eff;
+}
+
+.activity-button.active .activity-label {
+  opacity: 1;
+  color: var(--vscode-focus);
 }
 
 .activity-button.active::before {
@@ -50,6 +86,7 @@
   width: 2px;
   height: 100%;
   background: var(--vscode-focus);
+  border-radius: 0 2px 2px 0;
 }
 
 .ai-button {

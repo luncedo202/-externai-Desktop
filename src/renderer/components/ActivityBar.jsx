@@ -1,25 +1,16 @@
 import React from 'react';
 import { 
   FiFile, 
-  FiSearch, 
-  FiGitBranch, 
-  FiPlayCircle, 
-  FiPackage, 
   FiSettings,
-  FiMessageSquare,
   FiImage,
   FiGlobe
 } from 'react-icons/fi';
 import './ActivityBar.css';
 
-function ActivityBar({ activeView, onViewChange, onAIToggle, onShowPublishedApps }) {
+function ActivityBar({ activeView, onViewChange, onShowPublishedApps }) {
   const buttons = [
-    { id: 'explorer', icon: FiFile, tooltip: 'Explorer' },
-    { id: 'search', icon: FiSearch, tooltip: 'Search' },
-    { id: 'git', icon: FiGitBranch, tooltip: 'Source Control' },
-    { id: 'run', icon: FiPlayCircle, tooltip: 'Run and Debug' },
-    { id: 'images', icon: FiImage, tooltip: 'Image Search' },
-    { id: 'extensions', icon: FiPackage, tooltip: 'Extensions' },
+    { id: 'explorer', icon: FiFile, tooltip: 'Explorer', label: 'Explorer' },
+    { id: 'images', icon: FiImage, tooltip: 'Image Search', label: 'Images' },
   ];
 
   return (
@@ -32,7 +23,8 @@ function ActivityBar({ activeView, onViewChange, onAIToggle, onShowPublishedApps
             onClick={() => onViewChange(button.id)}
             title={button.tooltip}
           >
-            <button.icon size={24} />
+            <button.icon size={22} />
+            <span className="activity-label">{button.label}</span>
           </button>
         ))}
       </div>
@@ -42,21 +34,16 @@ function ActivityBar({ activeView, onViewChange, onAIToggle, onShowPublishedApps
           onClick={onShowPublishedApps}
           title="My Published Apps"
         >
-          <FiGlobe size={24} />
-        </button>
-        <button
-          className="activity-button ai-button"
-          onClick={onAIToggle}
-          title="AI Assistant"
-        >
-          <FiMessageSquare size={24} />
+          <FiGlobe size={22} />
+          <span className="activity-label">Published<br/>Apps</span>
         </button>
         <button
           className="activity-button"
           onClick={() => onViewChange('settings')}
           title="Settings"
         >
-          <FiSettings size={24} />
+          <FiSettings size={22} />
+          <span className="activity-label">Settings</span>
         </button>
       </div>
     </div>

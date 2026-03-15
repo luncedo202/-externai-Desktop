@@ -143,4 +143,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getUser: () => ipcRenderer.invoke('auth:getUser'),
     clearUser: () => ipcRenderer.invoke('auth:clearUser'),
   },
+
+  // OpenAI - for file explanations
+  openai: {
+    explain: (data) => ipcRenderer.invoke('openai:explain', data),
+  },
 });

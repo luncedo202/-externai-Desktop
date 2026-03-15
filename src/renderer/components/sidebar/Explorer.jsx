@@ -202,12 +202,41 @@ function Explorer({ workspaceFolder, onOpenFile, onOpenFolder, refreshTrigger, o
     if (result.success) {
       console.log('[OK] Folder loaded, items:', result.items.length);
       console.log('[INFO] Items:', result.items.map(i => i.name));
-      // Force new object reference to trigger re-render
-      setFolderTree({
-        path,
-        items: [...result.items] // Create new array reference
-      });
-      setExpandedFolders(new Set([path]));
+      
+      // Auto-expand recommended folders (src, public, components)
+      const loadedTree = { path, items: [...result.items] };
+      const allPaths = new Set([path]);
+      
+      const shouldAutoExpand = (folderName, depth) => {
+        if (depth === 0) return true; // Always expand root
+        if (depth === 1) {
+          // Expand important first-level folders
+          return ['src', 'public', 'components', 'pages', 'app', 'lib', 'utils'].includes(folderName);
+        }
+        if (depth === 2) {
+          // Expand second-level only for specific paths
+          return ['components', 'pages', 'routes', 'views'].includes(folderName);
+        }
+        return false; // Don't auto-expand deeper levels
+      };
+      
+      const loadSubdirs = async (items, parentPath, depth) => {
+        for (const item of items) {
+          if (item.isDirectory && shouldAutoExpand(item.name, depth)) {
+            allPaths.add(item.path);
+            const subResult = await window.electronAPI.fs.readDir(item.path);
+            if (subResult.success) {
+              item.children = subResult.items;
+              await loadSubdirs(item.children, item.path, depth + 1);
+            }
+          }
+        }
+      };
+      
+      await loadSubdirs(loadedTree.items, path, 1);
+      
+      setFolderTree(loadedTree);
+      setExpandedFolders(allPaths);
     } else {
       console.error('[ERROR] Failed to load folder:', result.error);
     }

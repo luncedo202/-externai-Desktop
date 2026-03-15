@@ -82,6 +82,15 @@ class PublishService {
 
       onProgress({ status: 'complete', message: 'Published successfully!' });
 
+      // Persist locally so Published Apps panel always shows the app
+      this._saveAppLocally({
+        appId: data.appId,
+        displayName: projectName,
+        url: data.url,
+        updatedAt: new Date().toISOString(),
+        visits: 0,
+      });
+
       return {
         success: true,
         url: data.url,
@@ -205,30 +214,78 @@ class PublishService {
   }
 
   /**
+   * Persist a single published app entry to localStorage
+   */
+  _saveAppLocally(app) {
+    try {
+      const stored = this._loadLocalApps();
+      // Replace existing entry with same appId, or prepend
+      const filtered = stored.filter(a => a.appId !== app.appId);
+      filtered.unshift(app);
+      localStorage.setItem('externai_published_apps', JSON.stringify(filtered));
+    } catch (e) {
+      console.warn('Could not save app locally:', e);
+    }
+  }
+
+  /**
+   * Load published apps from localStorage
+   */
+  _loadLocalApps() {
+    try {
+      const raw = localStorage.getItem('externai_published_apps');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Remove a published app entry from localStorage
+   */
+  _removeAppLocally(appId) {
+    try {
+      const stored = this._loadLocalApps();
+      localStorage.setItem('externai_published_apps', JSON.stringify(stored.filter(a => a.appId !== appId)));
+    } catch (e) {
+      console.warn('Could not remove app locally:', e);
+    }
+  }
+
+  /**
    * Get list of user's published apps
+   * Loads from localStorage immediately; tries cloud to refresh/merge.
    */
   async getMyApps() {
+    const localApps = this._loadLocalApps();
+
     try {
       const getMyAppsFn = httpsCallable(this.functions, 'getMyApps');
       const result = await getMyAppsFn();
-      
-      return { 
-        success: true, 
-        apps: result.data.apps 
-      };
+      const cloudApps = result.data.apps || [];
+
+      // Merge: cloud is authoritative; add any local-only entries the cloud doesn't know about yet
+      const cloudIds = new Set(cloudApps.map(a => a.appId));
+      const localOnly = localApps.filter(a => !cloudIds.has(a.appId));
+      const merged = [...cloudApps, ...localOnly];
+
+      // Keep localStorage in sync with merged list
+      localStorage.setItem('externai_published_apps', JSON.stringify(merged));
+
+      return { success: true, apps: merged };
     } catch (error) {
-      console.error('Error getting apps:', error);
-      
+      console.warn('Could not reach cloud for published apps, using local cache:', error);
+
+      // Fall back to whatever we have locally
+      if (localApps.length > 0) {
+        return { success: true, apps: localApps };
+      }
+
       let errorMessage = 'Failed to load published apps';
       if (error.code === 'functions/unauthenticated') {
         errorMessage = 'Please sign in to view your published apps';
       }
-      
-      return { 
-        success: false, 
-        error: errorMessage, 
-        apps: [] 
-      };
+      return { success: false, error: errorMessage, apps: [] };
     }
   }
 
@@ -239,7 +296,7 @@ class PublishService {
     try {
       const unpublishAppFn = httpsCallable(this.functions, 'unpublishApp');
       await unpublishAppFn({ appId });
-      
+      this._removeAppLocally(appId);
       return { success: true };
     } catch (error) {
       console.error('Error unpublishing app:', error);

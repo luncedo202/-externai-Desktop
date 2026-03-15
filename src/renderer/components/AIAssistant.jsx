@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader, FiMic, FiVolume2, FiVolumeX } from 'react-icons/fi';
+import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader } from 'react-icons/fi';
 import ClaudeService from '../services/ClaudeService';
 import AnalyticsService from '../services/AnalyticsService';
 import ProjectStateService from '../services/ProjectStateService';
@@ -215,6 +215,7 @@ const AIAssistant = forwardRef(({
   onClose,
   onUpgradeClick,
   workspaceFolder,
+  currentUser,
   onOpenFolder,
   onFileCreated,
   onDevServerDetected,
@@ -228,9 +229,15 @@ const AIAssistant = forwardRef(({
   devServerUrl
 }, ref) => {
   // Load messages from localStorage if available, but reset if workspaceFolder changes
+  const userName = currentUser?.displayName
+    ? currentUser.displayName.split(' ')[0]
+    : currentUser?.email
+      ? currentUser.email.split('@')[0]
+      : null;
+
   const defaultWelcome = {
     role: 'assistant',
-    content: 'Hello! I\'m your AI coding assistant.\n\nI can help you build software:\n\n Create complete, working code for websites, mobile apps, and games\n Debug and fix errors with clear explanations\n Explain code in simple, beginner-friendly terms\n Build full project structures ready to deploy\n Understand your entire project - I can see all your files\n Run terminal commands automatically\n\nJust tell me what you want to build:\n- "Create a landing page for my startup"\n- "Build a contact form with email validation"\n- "Make a simple game"\n- "Add a login page to my website"\n\nI\'ll immediately create the files and run any necessary commands. No manual steps required.\n\nWhat would you like to build?',
+    content: `Hey${userName ? ` ${userName}` : ''}! Tell me what you want to build and I'll handle everything — no coding knowledge needed.\n\nTry something like:\n- "I want a website where people can book appointments"\n- "Build me an online store that takes payments"\n- "Make a platform where users can sign up and post content"\n- "I need a dashboard to track my business metrics"\n\nJust describe your idea in plain English. I'll take care of the rest.`,
   };
 
   const [messages, setMessages] = useState(() => {
@@ -248,6 +255,10 @@ const AIAssistant = forwardRef(({
   // Save and restore chat history per project when workspaceFolder changes
   useEffect(() => {
     if (!workspaceFolder) return;
+
+    // Prevent saving while we're loading
+    isLoadingHistory.current = true;
+    currentWorkspaceRef.current = workspaceFolder;
 
     const projectKey = `ai-chat-${workspaceFolder}`;
     const stored = localStorage.getItem(projectKey);
@@ -272,11 +283,23 @@ const AIAssistant = forwardRef(({
       setMessages([defaultWelcome]);
       conversationHistory.current = [];
     }
+
+    // Allow saving after a short delay to ensure state has settled
+    setTimeout(() => {
+      isLoadingHistory.current = false;
+    }, 100);
   }, [workspaceFolder]);
 
   // Persist messages to localStorage per project on every update
   useEffect(() => {
-    if (!workspaceFolder) return;
+    // Don't save if no workspace, or if we're in the middle of loading history
+    if (!workspaceFolder || isLoadingHistory.current) return;
+    
+    // Don't save if workspace changed (stale closure protection)
+    if (workspaceFolder !== currentWorkspaceRef.current) return;
+
+    // Don't save if it's just the default welcome (no user interaction yet)
+    if (messages.length === 1 && messages[0].role === 'assistant') return;
 
     try {
       const projectKey = `ai-chat-${workspaceFolder}`;
@@ -290,15 +313,10 @@ const AIAssistant = forwardRef(({
   const [isTerminalBusy, setIsTerminalBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  // Voice capabilities state
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [currentlySpeakingId, setCurrentlySpeakingId] = useState(null);
-  const [voiceSupported, setVoiceSupported] = useState(true);
-  const [availableVoices, setAvailableVoices] = useState([]);
-  const [selectedVoiceURI, setSelectedVoiceURI] = useState(localStorage.getItem('ai-voice-uri') || '');
-  const recognitionRef = useRef(null);
-  const synthRef = useRef(null);
+  // Guard to prevent saving during load
+  const isLoadingHistory = useRef(false);
+  const currentWorkspaceRef = useRef(workspaceFolder);
+
   const [subscription, setSubscription] = useState(null); // Track user subscription
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
@@ -311,8 +329,10 @@ const AIAssistant = forwardRef(({
   const [justDropped, setJustDropped] = useState(false); // Show success feedback after drop
   const abortControllerRef = useRef(null); // Track abort controller for cancelling requests
   const isSubmittingRef = useRef(false); // Guard against double submissions
+  const powershellPolicyChecked = useRef(false); // Only check PS execution policy once per session
   const lastSubmittedMessageRef = useRef(null); // Track last submitted message to prevent StrictMode duplicates
   const [retryContext, setRetryContext] = useState(null); // Store context for retry functionality
+  const lastUserMessageRef = useRef(null); // Store last user message for retry on interruption
   const workspaceFolderRef = useRef(workspaceFolder);
 
   // Keep ref in sync with state
@@ -447,6 +467,39 @@ const AIAssistant = forwardRef(({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Retry handler for interrupted responses
+  const handleRetryInterrupted = async () => {
+    if (!lastUserMessageRef.current) return;
+
+    // Remove the interrupted message
+    setMessages(prev => prev.filter(msg => !msg.isInterrupted));
+
+    // Pop the last assistant message from conversation history (the incomplete one)
+    if (conversationHistory.current.length > 0 && 
+        conversationHistory.current[conversationHistory.current.length - 1].role === 'assistant') {
+      conversationHistory.current.pop();
+    }
+
+    // Pop the last user message too (we'll re-add it)
+    if (conversationHistory.current.length > 0 && 
+        conversationHistory.current[conversationHistory.current.length - 1].role === 'user') {
+      conversationHistory.current.pop();
+    }
+
+    // Remove the user message from UI too
+    setMessages(prev => {
+      const lastUserIdx = prev.findLastIndex(msg => msg.role === 'user');
+      if (lastUserIdx !== -1) {
+        return prev.slice(0, lastUserIdx);
+      }
+      return prev;
+    });
+
+    // Resend the message
+    const { text, images } = lastUserMessageRef.current;
+    await sendMessage(text, images);
   };
 
   // Automatic Fix logic when a command fails
@@ -624,55 +677,7 @@ When a command fails, auto-fix automatically:
 It requires the backend server to communicate with Claude AI.`;
   };
 
-  // Check voice support on mount
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const speechSynthesis = window.speechSynthesis;
 
-    if (!SpeechRecognition || !speechSynthesis) {
-      setVoiceSupported(false);
-      console.warn('Web Speech API not supported in this browser');
-    } else {
-      setVoiceSupported(true);
-
-      // Load voices
-      const loadVoices = () => {
-        const voices = speechSynthesis.getVoices();
-        setAvailableVoices(voices);
-
-        // If no voice is selected yet, or we want to ensure Alex is the default
-        if (voices.length > 0) {
-          const alexVoice = voices.find(v => v.name.includes('Alex'));
-          const currentVoice = selectedVoiceURI ? voices.find(v => v.voiceURI === selectedVoiceURI) : null;
-
-          // If Alex exists and we don't have a valid selection or we're resetting to user preference
-          if (alexVoice && (!currentVoice || !selectedVoiceURI)) {
-            setSelectedVoiceURI(alexVoice.voiceURI);
-            localStorage.setItem('ai-voice-uri', alexVoice.voiceURI);
-          } else if (!selectedVoiceURI) {
-            // Fallback strategy if Alex isn't found
-            const naturalVoice = voices.find(v => v.name.includes('Daniel')) ||
-              voices.find(v => v.name.includes('Ava') && v.name.includes('Premium')) ||
-              voices.find(v => v.name.includes('Samantha')) ||
-              voices.find(v => v.name.includes('Google')) ||
-              voices.find(v => v.name.includes('Natural')) ||
-              voices.find(v => v.lang.startsWith('en-US')) ||
-              voices[0];
-
-            if (naturalVoice) {
-              setSelectedVoiceURI(naturalVoice.voiceURI);
-              localStorage.setItem('ai-voice-uri', naturalVoice.voiceURI);
-            }
-          }
-        }
-      };
-
-      loadVoices();
-      if (speechSynthesis.onvoiceschanged !== undefined) {
-        speechSynthesis.onvoiceschanged = loadVoices;
-      }
-    }
-  }, [selectedVoiceURI]);
 
   // Fetch subscription status on mount
   useEffect(() => {
@@ -788,6 +793,9 @@ It requires the backend server to communicate with Claude AI.`;
     lastSubmittedMessageRef.current = { content: messageContent, timestamp: Date.now() };
 
     const userMessageObj = { id: userMessageId, role: 'user', content: messageContent };
+
+    // Store for retry on interruption
+    lastUserMessageRef.current = { text: messageText, images: attachedImgs };
 
     // Add message to state
     setMessages(prev => [...prev, userMessageObj]);
@@ -1081,22 +1089,45 @@ It requires the backend server to communicate with Claude AI.`;
             id: Date.now(),
             role: 'system',
             isSubscriptionError: true,
-            content: `**AI Limit Reached**\n\nYou’ve used all your free prompts. [Upgrade now](#upgrade) for unlimited access and faster building!`
+            content: `**AI Limit Reached**\n\nYou’ve used all your free prompts. [Upgrade now](#upgrade) for unlimited access and faster Build mode!`
           }
         ]);
 
         // Track limit reached
         AnalyticsService.trackSubscription('limit_reached', 'free', 0);
       } else {
+        // Check if response was interrupted (has partial content)
+        const isInterrupted = error.message.includes('Stream') || 
+                              error.message.includes('network') || 
+                              error.message.includes('timeout') ||
+                              error.message.includes('aborted') ||
+                              error.name === 'AbortError';
+
         setError(error.message);
-        // Combine filter and add in single setState call to avoid race conditions
-        setMessages(prev => [
-          ...prev.filter(msg => msg.id !== streamingMessageId),
-          {
-            role: 'assistant',
-            content: ` **Error:** ${error.message}\n\nPlease check:\n1. Your API key is correctly configured\n2. You have API credits available\n3. Your internet connection is working\n\nTry asking your question again!`
+        
+        // Mark the streaming message as interrupted instead of replacing it
+        setMessages(prev => {
+          const streamingMsg = prev.find(msg => msg.id === streamingMessageId);
+          const hasPartialContent = streamingMsg && streamingMsg.content && streamingMsg.content.length > 0;
+          
+          if (hasPartialContent || isInterrupted) {
+            // Keep partial content and mark as interrupted
+            return prev.map(msg =>
+              msg.id === streamingMessageId
+                ? { ...msg, isStreaming: false, isInterrupted: true }
+                : msg
+            );
+          } else {
+            // No content, show error message
+            return [
+              ...prev.filter(msg => msg.id !== streamingMessageId),
+              {
+                role: 'assistant',
+                content: ` **Error:** ${error.message}\n\nPlease check:\n1. Your API key is correctly configured\n2. You have API credits available\n3. Your internet connection is working\n\nTry asking your question again!`
+              }
+            ];
           }
-        ]);
+        });
       }
 
       // Track error in analytics
@@ -1111,6 +1142,32 @@ It requires the backend server to communicate with Claude AI.`;
   useImperativeHandle(ref, () => ({
     sendMessage: (messageText) => {
       sendMessage(messageText, []);
+    },
+    addSystemMessage: (messageText) => {
+      const systemMessage = {
+        role: 'system',
+        content: messageText,
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, systemMessage]);
+    },
+    focusInput: () => {
+      const textarea = document.querySelector('.ai-input');
+      if (textarea) {
+        textarea.focus();
+        textarea.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+    },
+    setInputAndFocus: (text) => {
+      setInput(text);
+      setTimeout(() => {
+        const textarea = document.querySelector('.ai-input');
+        if (textarea) {
+          textarea.focus();
+          textarea.setSelectionRange(text.length, text.length);
+          textarea.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+      }, 50);
     }
   }));
 
@@ -1147,162 +1204,7 @@ It requires the backend server to communicate with Claude AI.`;
     ));
   };
 
-  // Voice Input: Start recording
-  const startVoiceInput = () => {
-    if (!voiceSupported) {
-      alert('Voice input is not supported in your browser. Please use Chrome, Edge, or Safari.');
-      return;
-    }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsRecording(true);
-      console.log('Voice recording started');
-    };
-
-    recognition.onresult = (event) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + ' ';
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-
-      // Update input with final transcript
-      if (finalTranscript) {
-        setInput(prev => prev + finalTranscript);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      setIsRecording(false);
-
-      if (event.error === 'no-speech') {
-        console.log('No speech detected');
-      } else if (event.error === 'not-allowed') {
-        alert('Microphone access denied. Please allow microphone access in your browser settings.');
-      } else {
-        alert(`Voice input error: ${event.error}`);
-      }
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-      console.log('Voice recording ended');
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  };
-
-  // Voice Input: Stop recording
-  const stopVoiceInput = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
-    setIsRecording(false);
-  };
-
-  // Voice Output: Speak message
-  const speakMessage = (text, messageId) => {
-    if (!voiceSupported) {
-      alert('Voice output is not supported in your browser. Please use Chrome, Edge, or Safari.');
-      return;
-    }
-
-    // If already speaking this message, stop it
-    if (currentlySpeakingId === messageId) {
-      stopSpeaking();
-      return;
-    }
-
-    // Stop any current speech
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-    }
-
-    // Remove code blocks and special formatting for better speech
-    const cleanText = text
-      .replace(/```[\s\S]*?```/g, '') // Remove code blocks
-      .replace(/`[^`]+`/g, '') // Remove inline code
-      .replace(/#{1,6}\s/g, '') // Remove markdown headers
-      .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold
-      .replace(/\*([^*]+)\*/g, '$1') // Remove italic
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
-      .replace(/^[-*+]\s/gm, '') // Remove list markers
-      .trim();
-
-    if (!cleanText) {
-      alert('No text to speak');
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-
-    // Set selected voice if available
-    if (selectedVoiceURI) {
-      const voice = availableVoices.find(v => v.voiceURI === selectedVoiceURI);
-      if (voice) {
-        utterance.voice = voice;
-      }
-    }
-
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-      setCurrentlySpeakingId(messageId);
-    };
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      setCurrentlySpeakingId(null);
-    };
-
-    utterance.onerror = (event) => {
-      console.error('Speech synthesis error:', event.error);
-      setIsSpeaking(false);
-      setCurrentlySpeakingId(null);
-    };
-
-    window.speechSynthesis.speak(utterance);
-  };
-
-  // Voice Output: Stop speaking
-  const stopSpeaking = () => {
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-    }
-    setIsSpeaking(false);
-    setCurrentlySpeakingId(null);
-  };
-
-  // Cleanup voice on unmount
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
 
   // Handle form submission
 
@@ -1354,9 +1256,14 @@ It requires the backend server to communicate with Claude AI.`;
     e.preventDefault();
     e.stopPropagation();
     // Only set to false if leaving the form container itself
-    if (e.target.className === 'ai-input-container' || e.target.className === 'ai-input-form') {
+    const className = e.target.className || '';
+    if (className.includes('ai-input-container') || className.includes('ai-input-form') || className.includes('ai-assistant')) {
       setIsDraggingOver(false);
     }
+  };
+
+  const cancelDrag = () => {
+    setIsDraggingOver(false);
   };
 
   const handleDrop = (e) => {
@@ -1613,6 +1520,34 @@ Could you provide more details about what you'd like to build?`;
   const executeCommandsAutomatically = async (messageContent) => {
     const commands = extractCommands(messageContent);
     if (commands.length === 0) return;
+
+    // On Windows, check PowerShell execution policy once per session before running any commands
+    if (process.platform === 'win32' && !powershellPolicyChecked.current) {
+      powershellPolicyChecked.current = true;
+      try {
+        const policyResult = await window.electronAPI.terminalExecute('powershell -Command "Get-ExecutionPolicy"', workspaceFolderRef.current);
+        const policyOutput = (policyResult.stdout || '').trim();
+        if (policyOutput.toLowerCase().includes('restricted')) {
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: '**Fixing PowerShell execution policy...** (Required to run npm commands on Windows)',
+            isWorking: true,
+            id: 'ps-policy-fix'
+          }]);
+          await window.electronAPI.terminalExecute(
+            'powershell -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force"',
+            workspaceFolderRef.current
+          );
+          setMessages(prev => prev.map(msg =>
+            msg.id === 'ps-policy-fix'
+              ? { ...msg, isWorking: false, content: '**PowerShell execution policy updated.** You can now run npm commands.' }
+              : msg
+          ));
+        }
+      } catch (err) {
+        console.warn('PowerShell policy check failed:', err);
+      }
+    }
 
     setIsTerminalBusy(true);
     try {
@@ -2405,7 +2340,14 @@ Could you provide more details about what you'd like to build?`;
     <div className="ai-assistant">
       <div className="ai-header">
         <div className="ai-header-content">
-          <h3>AI Assistant</h3>
+          {currentUser?.email && (
+            <div className="ai-user-email">
+              <div className="ai-user-avatar">
+                {(currentUser.displayName || currentUser.email).charAt(0).toUpperCase()}
+              </div>
+              <span>{currentUser.email}</span>
+            </div>
+          )}
           {subscription && subscription.tier === 'free' && (
             <div className="subscription-status">
               <span className="prompts-remaining">
@@ -2413,31 +2355,7 @@ Could you provide more details about what you'd like to build?`;
               </span>
             </div>
           )}
-          {voiceSupported && availableVoices.length > 0 && (
-            <div className="voice-selector-container">
-              <select
-                className="voice-selector"
-                value={selectedVoiceURI}
-                onChange={(e) => {
-                  setSelectedVoiceURI(e.target.value);
-                  localStorage.setItem('ai-voice-uri', e.target.value);
-                  // Stop any current speech when voice is changed
-                  if (window.speechSynthesis.speaking) {
-                    window.speechSynthesis.cancel();
-                  }
-                }}
-                title="Select Voice"
-              >
-                {availableVoices
-                  .filter(v => v.lang.startsWith('en')) // Filter for English voices for better defaults
-                  .map(voice => (
-                    <option key={voice.voiceURI} value={voice.voiceURI}>
-                      {voice.name} ({voice.lang})
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
+
         </div>
         <button className="ai-close" onClick={onClose}>
           <FiX size={18} />
@@ -2741,20 +2659,21 @@ Could you provide more details about what you'd like to build?`;
                   </div>
                 )}
 
-                {/* Voice output button for assistant messages */}
-                {msg.role === 'assistant' && voiceSupported && !msg.isStreaming && (
-                  <button
-                    className={`voice-output-button ${currentlySpeakingId === messageKey ? 'speaking' : ''}`}
-                    onClick={() => speakMessage(msg.content, messageKey)}
-                    title={currentlySpeakingId === messageKey ? "Stop speaking" : "Read aloud"}
-                  >
-                    {currentlySpeakingId === messageKey ? (
-                      <FiVolumeX size={14} />
-                    ) : (
-                      <FiVolume2 size={14} />
-                    )}
-                  </button>
+                {/* Interrupted response indicator */}
+                {msg.isInterrupted && (
+                  <div className="interrupted-indicator">
+                    <span className="interrupted-text">Response interrupted</span>
+                    <button
+                      className="interrupted-retry-btn"
+                      onClick={handleRetryInterrupted}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? 'Continuing...' : 'Continue'}
+                    </button>
+                  </div>
                 )}
+
+
               </div>
             );
           })}
@@ -2813,41 +2732,64 @@ Could you provide more details about what you'd like to build?`;
           </div>
         )}
 
-        <div className={`ai-input-container ${isTerminalBusy ? 'terminal-busy' : ''}`}>
+        <div className={`ai-input-container ${isTerminalBusy ? 'terminal-busy' : ''} ${isDraggingOver ? 'drag-active' : ''}`}>
+          {/* Dev server URL bar */}
+          {devServerUrl && (
+            <div className="dev-server-bar" onClick={() => { window.electronAPI?.openExternal?.(devServerUrl) || window.open(devServerUrl, '_blank'); }}>
+              <span className="dev-server-dot"></span>
+              <span>Click to open</span>
+              <span className="dev-server-url">{devServerUrl}</span>
+            </div>
+          )}
           <div className="ai-input-glow"></div>
+          {/* Drag overlay with cancel button */}
+          {isDraggingOver && (
+            <div className="drag-overlay">
+              <div className="drag-overlay-content">
+                <span>Drop image here...</span>
+                <button
+                  type="button"
+                  className="drag-cancel-btn"
+                  onClick={() => setIsDraggingOver(false)}
+                  title="Cancel"
+                >
+                  <FiX size={14} />
+                </button>
+              </div>
+            </div>
+          )}
           <div className="ai-input-inner">
-            <textarea
-              className="ai-input"
-              placeholder={isTerminalBusy ? "Terminal active - Waiting to complete..." : (isDraggingOver ? "Drop image here..." : "What would you like to build today?")}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                // Submit on Enter, add newline on Shift+Enter
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-              }}
-              disabled={isLoading || isTerminalBusy}
-              rows={3}
-            />
+            <div className="ai-input-textarea-wrap">
+              <textarea
+                className="ai-input"
+                placeholder={isTerminalBusy ? "Terminal active - Waiting to complete..." : "What would you like to build today?"}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  // Submit on Enter, add newline on Shift+Enter
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }}
+                disabled={isLoading || isTerminalBusy}
+                rows={3}
+              />
+              {input.trim() && (
+                <button
+                  type="button"
+                  className="ai-input-clear"
+                  onClick={() => setInput('')}
+                  title="Clear input"
+                >
+                  <FiX size={14} />
+                </button>
+              )}
+            </div>
             <div className="ai-input-actions">
               <div className="input-hint">
                 <kbd>Enter</kbd> to send  <kbd>Shift+Enter</kbd> for new line
               </div>
-
-              {/* Voice input button */}
-              {voiceSupported && (
-                <button
-                  type="button"
-                  className={`voice-input-button ${isRecording ? 'recording' : ''}`}
-                  onClick={isRecording ? stopVoiceInput : startVoiceInput}
-                  disabled={isLoading || isTerminalBusy}
-                  title={isRecording ? "Stop recording" : "Voice input"}
-                >
-                  <FiMic size={16} />
-                </button>
-              )}
 
               <button
                 type="submit"
@@ -2864,6 +2806,17 @@ Could you provide more details about what you'd like to build?`;
                   </>
                 )}
               </button>
+              {isLoading && (
+                <button
+                  type="button"
+                  className="ai-cancel"
+                  onClick={handleStopGeneration}
+                  title="Cancel generation"
+                >
+                  <FiX size={14} />
+                  <span>Cancel</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

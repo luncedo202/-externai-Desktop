@@ -12,6 +12,7 @@ import AnalyticsService from './services/AnalyticsService';
 import PricingPlans from './components/PricingPlans';
 import NodeJsRequiredModal from './components/NodeJsRequiredModal';
 import PublishModal from './components/PublishModal';
+import PublishedApps from './components/PublishedApps';
 import './App.css';
 
 function App() {
@@ -47,6 +48,10 @@ function App() {
   const [hasAiResponded, setHasAiResponded] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showPublishedApps, setShowPublishedApps] = useState(false);
+  const [showSupabase, setShowSupabase] = useState(false);
+  const [showGitHub, setShowGitHub] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
   const [devServerUrl, setDevServerUrl] = useState(null); // Track active dev server URL
   const [isNodeInstalled, setIsNodeInstalled] = useState(true);
   const aiAssistantRef = useRef(null);
@@ -503,7 +508,7 @@ function App() {
         <ActivityBar
           activeView={activeView}
           onViewChange={setActiveView}
-          onAIToggle={() => setAiVisible(!aiVisible)}
+          onShowPublishedApps={() => setShowPublishedApps(true)}
         />
         {sidebarVisible && (
           <Sidebar
@@ -531,12 +536,22 @@ function App() {
             onFileClose={handleCloseFile}
             onContentChange={handleFileContentChange}
             onOpenFolder={handleOpenFolder}
+            onStartBuilding={() => aiAssistantRef.current?.focusInput()}
+            onBuildIdea={(text) => aiAssistantRef.current?.setInputAndFocus(text)}
             theme={theme}
             onPreviewClick={handlePreviewRequest}
             onPublishClick={handlePublishRequest}
             onCursorChange={setCursorPosition}
             pendingPlan={pendingPlan}
             devServerUrl={devServerUrl}
+            showSupabase={showSupabase}
+            onSupabaseToggle={() => { setShowSupabase(v => !v); setShowGitHub(false); setShowIntegrations(false); }}
+            showGitHub={showGitHub}
+            onGitHubToggle={() => { setShowGitHub(v => !v); setShowSupabase(false); setShowIntegrations(false); }}
+            showIntegrations={showIntegrations}
+            onIntegrationsToggle={() => { setShowIntegrations(v => !v); setShowGitHub(false); setShowSupabase(false); }}
+            onSendToAI={(msg) => aiAssistantRef.current?.sendMessage(msg)}
+            workspaceFolder={workspaceFolder}
           />
           {panelVisible && (
             <Panel
@@ -560,6 +575,7 @@ function App() {
           onUpgradeClick={() => setShowPricing(true)}
           visible={aiVisible}
           workspaceFolder={workspaceFolder}
+          currentUser={currentUser}
           onOpenFolder={handleOpenFolder}
           onFileCreated={handleFileCreatedByAI}
           onDevServerDetected={handleDevServerDetected}
@@ -583,6 +599,9 @@ function App() {
           onClose={() => setShowPricing(false)}
           userEmail={currentUser?.email}
         />
+      )}
+      {showPublishedApps && (
+        <PublishedApps onClose={() => setShowPublishedApps(false)} />
       )}
       {showPublishModal && (
         <PublishModal
