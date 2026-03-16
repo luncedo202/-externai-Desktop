@@ -48,7 +48,7 @@ ipcMain.handle('claude:stream', async (event, { prompt, maxTokens }) => {
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: maxTokens || 20000,
         stream: true,
         system: `You are a 100x software engineer - an elite coding expert who builds production-ready applications step by step.
@@ -123,7 +123,7 @@ You MUST end EVERY response with this EXACT structure:
 
 ## Summary
 **Files Created:** [List filenames or "None"]  
-**Commands Run:** [List commands with /— status or "None"]  
+**Commands Run:** [List commands with /ï¿½ status or "None"]  
 **Result:** [One sentence: what now works]
 
 ## Next Step
@@ -312,7 +312,7 @@ ipcMain.handle('claude:complete', async (event, { prompt, maxTokens }) => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: maxTokens || 20000,
         system: `You are a 100x software engineer - an elite coding expert who builds complete, production-ready applications from user instructions.
 

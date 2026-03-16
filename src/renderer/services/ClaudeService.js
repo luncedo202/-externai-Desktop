@@ -15,7 +15,7 @@ async function getAuthToken() {
   }
 }
 
-async function getClaudeCompletion(prompt, maxTokens = 20000, timeout = 60000) {
+async function getClaudeCompletion(prompt, maxTokens = 64000, timeout = 60000) {
   console.log('[ClaudeService] Calling Claude via backend proxy...');
   console.log('[ClaudeService] Backend URL:', BACKEND_URL);
   console.log('[ClaudeService] Timeout:', timeout, 'ms');
@@ -123,7 +123,7 @@ async function getClaudeCompletion(prompt, maxTokens = 20000, timeout = 60000) {
   }
 }
 
-async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null, systemPrompt = null, projectState = null, conversationSummary = null) {
+async function getClaudeStream(prompt, onChunk, maxTokens = 64000, signal = null, systemPrompt = null, projectState = null, conversationSummary = null) {
   console.log('[ClaudeService] Starting Claude stream via backend...');
   console.log('[ClaudeService] Backend URL:', BACKEND_URL);
 
@@ -192,6 +192,7 @@ async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null
     let fullText = '';
     let buffer = ''; // Buffer for incomplete SSE lines
     let streamDone = false;
+    let stopReason = 'end_turn';
 
     try {
       while (true) {
@@ -261,6 +262,10 @@ async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null
             if (data.done || data.type === 'message_stop') {
               console.log('[ClaudeService] Received done signal. Current length:', fullText.length);
               streamDone = true;
+              if (data.stop_reason) {
+                stopReason = data.stop_reason;
+                console.log('[ClaudeService] Stop reason:', stopReason);
+              }
             }
 
             // Handle errors in stream
@@ -281,8 +286,8 @@ async function getClaudeStream(prompt, onChunk, maxTokens = 20000, signal = null
         }
       }
 
-      console.log('[ClaudeService] Stream finished. Total length:', fullText.length);
-      return { success: true, message: fullText };
+      console.log('[ClaudeService] Stream finished. Total length:', fullText.length, 'Stop reason:', stopReason);
+      return { success: true, message: fullText, stopReason };
     } catch (streamError) {
       console.error('[ClaudeService] Stream processing error:', streamError);
       console.error('[ClaudeService] Stream error name:', streamError.name);

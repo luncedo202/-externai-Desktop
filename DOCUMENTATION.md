@@ -705,7 +705,7 @@ All file system operations run in the main process and are exposed to the render
 
 ### Claude AI (Anthropic)
 
-ExternAI uses **Anthropic's Claude** (`claude-sonnet-4-5-20250929`) as its AI engine. All requests flow through the backend to protect the API key.
+ExternAI uses **Anthropic's Claude** (`claude-sonnet-4-20250514`) as its AI engine. All requests flow through the backend to protect the API key.
 
 ### Streaming Architecture
 

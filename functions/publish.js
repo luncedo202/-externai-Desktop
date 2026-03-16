@@ -115,8 +115,17 @@ exports.serveApp = onRequest(
 
 /** Stream a Storage file to the HTTP response. */
 async function serveFile(res, file, filePath, appId) {
-  const [content] = await file.download();
+  let [content] = await file.download();
   const ext = path.extname(filePath).toLowerCase();
+
+  // Rewrite absolute paths in HTML so assets resolve under /app/{appId}/
+  if (ext === '.html') {
+    let html = content.toString('utf-8');
+    const base = `/app/${appId}/`;
+    // Rewrite src="/..." and href="/..." to be relative to the app base
+    html = html.replace(/(src|href|action)="\//g, `$1="${base}`);
+    content = Buffer.from(html, 'utf-8');
+  }
 
   res.set('Content-Type', MIME[ext] || 'application/octet-stream');
   res.set('Cache-Control', 'public, max-age=3600');

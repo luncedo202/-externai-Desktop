@@ -82,7 +82,7 @@ router.post('/summarize', authenticateToken, async (req, res) => {
 
     // Call Claude to summarize
     const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       system: 'You are a technical summarizer. Generate concise, fact-based summaries.',
       messages: [
@@ -152,7 +152,7 @@ router.post('/stream', authenticateToken, async (req, res) => {
     }
 
     // Get request body
-    const { messages, max_tokens = 20000, system, projectState, conversationSummary } = req.body;
+    const { messages, max_tokens = 64000, system, projectState, conversationSummary } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Invalid messages format' });
@@ -166,9 +166,13 @@ CRITICAL RULES (READ FIRST)
 ═══════════════════════════════════════════
 
 
-1. BRIEF EXPLANATION
-   • You MAY briefly explain what you are about to do before the code.
-   • Keep it concise and helpful.
+1. BRIEF EXPLANATION — MANDATORY
+   • Before EVERY code block, write exactly 1 short sentence explaining what that file does.
+   • Example: "Here's the main app entry point:"
+   • Example: "This sets up your Tailwind CSS configuration:"
+   • Example: "This is the Express server with your API routes:"
+   • NEVER place multiple code blocks back-to-back without a sentence between them.
+   • Keep each sentence concise — one line maximum.
 
 2. FILE FORMAT - Without this, files won't be created:
 \`\`\`language filename=path/to/file.ext
@@ -194,10 +198,17 @@ CRITICAL RULES (READ FIRST)
 EXECUTION FLOW
 ═══════════════════════════════════════════
 
-ONE STEP AT A TIME:
+FIRST MESSAGE — ONE-SHOT CREATION:
+• Create ALL necessary files FIRST (package.json, config files, source files, etc.)
+• Then END with a bash block containing: npm install (first line) then the start command (e.g. npm run dev)
+• Every file must be 100% complete — no partial files
+• Files MUST be created BEFORE the bash block (so npm install can read package.json)
+
+FOLLOW-UP MESSAGES — ONE STEP AT A TIME:
 • Max 3 files OR 2 commands per response
 • Stop and wait after each batch
 • Each file must be 100% complete - no partial files
+• Only include npm install / start command if a NEW dependency was added
 
 • User says anything (continue/next/ok/yes) → proceed
 • User gives new instruction → switch to that
@@ -211,6 +222,12 @@ RESPONSE FORMAT (mandatory at end of every response):
 
 (Brief explanation)
 (Code blocks/Commands here)
+
+For FIRST message only — include bash block with BOTH commands right before the summary:
+\`\`\`bash
+npm install
+npm run dev
+\`\`\`
 
 ---
 **Summary**
@@ -232,7 +249,7 @@ WORK IN CURRENT FOLDER DIRECTLY:
 • NEVER run: cd, npx create-vite, create-react-app, mkdir
 • NEVER use absolute paths (e.g., /Users/...)
 • Use relative paths only (e.g., src/, public/)
-• First response MUST include ONLY 'npm install' and the start command in the bash block.
+• First response MUST end with a bash block containing 'npm install' on line 1 and the start command (npm run dev / npm start) on line 2.
 • Assume you are already in the correct root directory.
 
 ═══════════════════════════════════════════
@@ -476,13 +493,14 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
 
     // Start Anthropic stream
     const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: Math.min(max_tokens, 20000),
+      model: 'claude-sonnet-4-6',
+      max_tokens: Math.min(max_tokens, 64000),
       system: finalSystemPrompt,
       messages: messages,
     });
 
     let totalTokens = 0;
+    let stopReason = 'end_turn';
 
     // Handle stream events
     stream.on('text', (text) => {
@@ -492,6 +510,9 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
     stream.on('message', (message) => {
       if (message.usage) {
         totalTokens = message.usage.output_tokens || 0;
+      }
+      if (message.stop_reason) {
+        stopReason = message.stop_reason;
       }
     });
 
@@ -505,7 +526,7 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
         'usage.totalTokens': admin.firestore.FieldValue.increment(totalTokens)
       });
 
-      res.write(`data: ${JSON.stringify({ done: true, tokens: totalTokens })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true, tokens: totalTokens, stop_reason: stopReason })}\n\n`);
       res.end();
     });
 
@@ -548,7 +569,7 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
     res.status(500).json({
       error: 'Failed to process AI request',
       details: error.response?.data?.error?.message || error.message,
-      model_used: 'claude-sonnet-4-5-20250929'
+      model_used: 'claude-sonnet-4-6'
     });
   }
 });

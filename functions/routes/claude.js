@@ -78,7 +78,7 @@ router.post('/summarize', authenticateToken, async (req, res) => {
     }
 
     const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       system: 'You are a technical summarizer. Generate concise, fact-based summaries.',
       messages: [
@@ -193,6 +193,12 @@ RESPONSE FORMAT (mandatory at end of every response):
 (Brief explanation)
 (Code blocks/Commands here)
 
+For FIRST message only — include bash block with BOTH commands right before the summary:
+\`\`\`bash
+npm install
+npm run dev
+\`\`\`
+
 ---
 **Summary**
 [Recap of what was done]
@@ -216,14 +222,17 @@ WORK IN CURRENT FOLDER DIRECTLY:
 • Assume you are already in the correct root directory.
 
 CRITICAL - FIRST RESPONSE REQUIREMENTS:
-When starting a NEW project, your VERY FIRST response MUST include:
-1. A bash code block with ONLY these two commands:
+When starting a NEW project, your VERY FIRST response MUST:
+1. Write 1 short sentence before EACH file block — NEVER put two code blocks back-to-back.
+   - Example: "Here's the project configuration:"
+   - Example: "This is your main React component:"
+2. Create ALL necessary files (package.json, config files, source files) with a sentence before each.
+3. End with a bash code block containing setup commands:
    \`\`\`bash
-   npm install <dependencies>
+   npm install
    npm run dev
    \`\`\`
-2. Then create the necessary files (package.json, etc.)
-3. Do NOT create files before showing the install/start commands
+4. Files must be created BEFORE the bash block (so npm install can read package.json)
 
 ═══════════════════════════════════════════
 ERROR HANDLING & AUTO-FIX
@@ -252,14 +261,13 @@ You are the developer. Execute. Deliver. Every file complete and runnable.`;
     }
 
     console.log('[Claude] Creating Anthropic stream...');
-    console.log('[Claude] Model: claude-sonnet-4-5-20250929');
-    console.log('[Claude] Max tokens:', Math.min(max_tokens, 20000));
+    console.log('[Claude] Model: claude-sonnet-4-6');
     console.log('[Claude] Messages count:', messages.length);
 
     let stream;
     try {
       stream = anthropic.messages.stream({
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
         max_tokens: Math.min(max_tokens, 20000),
         system: finalSystemPrompt,
         messages: messages,

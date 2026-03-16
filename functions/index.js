@@ -5,6 +5,11 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
+// Load environment variables for local development
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: '.env.local' });
+}
+
 // Initialize Firebase Admin
 if (!admin.apps.length) {
     admin.initializeApp();

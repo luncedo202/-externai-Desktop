@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader } from 'react-icons/fi';
+import { FiX, FiSend, FiAlertCircle, FiDownload, FiFileText, FiFilePlus, FiEdit3, FiEye, FiCheck, FiLoader, FiCode, FiSettings, FiImage, FiFile } from 'react-icons/fi';
+import { SiJavascript, SiReact, SiHtml5, SiCss3, SiJson, SiMarkdown, SiPython, SiTypescript, SiNodedotjs } from 'react-icons/si';
 import ClaudeService from '../services/ClaudeService';
 import AnalyticsService from '../services/AnalyticsService';
 import ProjectStateService from '../services/ProjectStateService';
@@ -8,6 +9,34 @@ import './AIAssistant.css';
 // Debug flag - set to false to disable verbose logging in production
 const DEBUG = false;
 const debug = (...args) => DEBUG && console.log(...args);
+
+// Helper function to get file type icon based on extension
+const getFileIcon = (filename) => {
+  if (!filename) return <FiFile size={14} />;
+  
+  const ext = filename.split('.').pop().toLowerCase();
+  const iconProps = { size: 14, style: { flexShrink: 0 } };
+  
+  const iconMap = {
+    'js': <SiJavascript {...iconProps} color="#f7df1e" />,
+    'jsx': <SiReact {...iconProps} color="#61dafb" />,
+    'ts': <SiTypescript {...iconProps} color="#3178c6" />,
+    'tsx': <SiReact {...iconProps} color="#61dafb" />,
+    'html': <SiHtml5 {...iconProps} color="#e34f26" />,
+    'css': <SiCss3 {...iconProps} color="#1572b6" />,
+    'json': <SiJson {...iconProps} color="#5a5a5a" />,
+    'md': <SiMarkdown {...iconProps} color="#ffffff" />,
+    'py': <SiPython {...iconProps} color="#3776ab" />,
+    'config': <FiSettings {...iconProps} />,
+    'png': <FiImage {...iconProps} />,
+    'jpg': <FiImage {...iconProps} />,
+    'jpeg': <FiImage {...iconProps} />,
+    'svg': <FiImage {...iconProps} />,
+    'gif': <FiImage {...iconProps} />,
+  };
+  
+  return iconMap[ext] || <FiFile {...iconProps} />;
+};
 
 // STRICT CODE SANITIZER - Removes ALL code-like content from text
 // But preserves Summary section and markdown formatting
@@ -167,14 +196,39 @@ STRICT RULES for ONE-SHOT PROJECT CREATION
 
 1. NO FILE LIMIT: Create ALL necessary files in a single response to scaffold the entire project. Do not leave any missing dependencies.
 2. PREVENT CRASHES: Ensure that EVERY component imported in App.jsx or main.jsx is actually created. Never import a file that you haven't generated.
-3. AUTOMATIC SETUP & START (BASH BLOCK): Include ONE bash block with 'npm install' and the start command. NO 'cd' or absolute paths.
-4. ABSOLUTE COMPLETENESS & PREMIUM STYLING:
+3. BRIEF SENTENCE BEFORE EACH FILE — MANDATORY: Write exactly 1 short sentence before every code block to explain what that file is.
+   - Example: "Here's the main app entry point:"
+   - Example: "This configures Tailwind CSS:"
+   - NEVER place two code blocks back-to-back with no text between them.
+4. AUTOMATIC SETUP & START (BASH BLOCK): ALWAYS include a bash code block at the END of your response with the EXACT setup commands:
+   - Install ALL dependencies immediately: npm install
+   - Start the application so the user sees it instantly: npm run dev (or npm start)
+   - NO 'cd' commands or absolute paths — you are already in the project root
+   - List commands sequentially, one per line in the bash block
+5. ABSOLUTE COMPLETENESS & PREMIUM STYLING:
    - Your first response MUST be fully functional and VISUALLY STUNNING.
    - Use Tailwind CSS + modern CSS for premium aesthetics (Gradients, Glassmorphism).
    - ALWAYS include 'src/index.css' with @tailwind directives.
    - ALWAYS include necessary config files (tailwind.config.js, postcss.config.js).
    - NEVER use placeholders.
-5. EFFICIENCY: Deliver complete, runnable code immediately.
+   - UI DESIGN INSPIRATION — MANDATORY: Draw visual and UX inspiration from these world-class products:
+     * Framer & Webflow — fluid layouts, smooth motion, editorial whitespace
+     * Tesla & Pitch — bold dark themes, cinematic hero sections, high contrast
+     * Dropbox & Slack — clean hierarchy, friendly spacing, trustworthy color palettes
+     * Typeform & Superhuman — focused single-purpose views, distraction-free UX, keyboard-first feel
+     * Revolut & Shopify — sharp data presentation, premium card components, conversion-optimized layouts
+     * Grammarly — subtle AI-powered highlights, non-intrusive suggestions, polished micro-interactions
+   - Combine the best of these: Bold typography (large, weighted headings), refined color systems (deep backgrounds with vibrant accents), generous spacing, purposeful animations, and pixel-perfect component design.
+   - Every UI you build must feel like it belongs in a $10M-funded SaaS product.
+6. MOBILE-FIRST — MANDATORY:
+   - Every application MUST be fully mobile-friendly. Design mobile-first, then scale up.
+   - Use responsive Tailwind classes (sm:, md:, lg:) on EVERY layout element. No fixed widths.
+   - Study and replicate the mobile excellence of: Airbnb (fluid cards, thumb-friendly nav, bottom sheets), Dropbox (clean stacked layouts, large tap targets), Apple (full-bleed hero images, elegant scroll), Figma (compact toolbars, swipe gestures, adaptive panels), Stripe (crisp mobile docs, readable code blocks, smooth accordions), Notion (seamless mobile editing, collapsible blocks, floating action buttons), Spotify (bold imagery, tab-bar navigation, horizontal scroll carousels), Instagram (edge-to-edge media, gesture-driven UI, sticky headers), Uber (map-first layout, bottom drawer pattern, one-thumb reachability), Linear (minimal mobile dashboard, swipeable lists, keyboard shortcuts), Vercel (responsive deploy cards, dark-mode-first, status indicators), Medium (typography-focused reading, distraction-free mobile layout, pull-to-refresh).
+   - Viewport meta tag is REQUIRED: <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   - Touch targets must be minimum 44×44px. Use mobile-friendly navigation (bottom nav bar or hamburger menu, never wide horizontal navbars on small screens).
+   - Test every layout mentally at 375px width. If it would break or require horizontal scroll, fix it.
+   - Images must use max-w-full and responsive sizing. Text must be readable without zooming.
+7. EFFICIENCY: Deliver complete, runnable code immediately.
 
 Ensure your code blocks are correctly formatted with file paths (e.g., \`\`\`javascript:path/to/file.js\`\`\`) and your terminal commands are in a separate bash block.`;
 
@@ -206,7 +260,24 @@ STRICT RULES for FOLLOW-UP ITERATIONS
 3. NO REDUNDANT SETUP: Do NOT include 'npm install' or server-start commands unless a NEW dependency was added or specifically requested.
 4. COMPLETE FILES: When providing a fix or update, ALWAYS provide the ENTIRE file content for the files you are changing. Never use partial snippets or "// ... existing code".
 5. MAINTAIN STYLE: Ensure any new UI elements match the existing premium aesthetics (Tailwind, Gradients, etc.).
-6. NO DIRECTORY NAVIGATION: Do not use 'cd' or absolute paths.
+   - UI DESIGN INSPIRATION — MANDATORY: When creating or updating any UI, draw visual and UX inspiration from:
+     * Framer & Webflow — fluid layouts, smooth motion, editorial whitespace
+     * Tesla & Pitch — bold dark themes, cinematic hero sections, high contrast
+     * Dropbox & Slack — clean hierarchy, friendly spacing, trustworthy color palettes
+     * Typeform & Superhuman — focused single-purpose views, distraction-free UX, keyboard-first feel
+     * Revolut & Shopify — sharp data presentation, premium card components, conversion-optimized layouts
+     * Grammarly — subtle AI highlights, non-intrusive interactions, polished micro-animations
+   - All UI updates must feel cohesive, premium, and production-ready — like a $10M-funded SaaS product.
+6. MOBILE-FIRST — MANDATORY:
+   - All UI changes MUST remain fully mobile-friendly. Never break mobile responsiveness.
+   - Use responsive Tailwind classes (sm:, md:, lg:) on layout elements. No fixed widths.
+   - Replicate the mobile UX quality of: Airbnb (fluid cards, thumb-friendly nav), Dropbox (clean stacked layouts, large tap targets), Apple (full-bleed heroes, elegant scroll), Figma (compact toolbars, adaptive panels), Stripe (crisp mobile docs, smooth accordions), Notion (collapsible blocks, floating action buttons), Spotify (tab-bar nav, horizontal scroll carousels), Instagram (edge-to-edge media, gesture-driven UI), Uber (bottom drawer pattern, one-thumb reachability), Linear (swipeable lists, minimal dashboards), Vercel (responsive cards, dark-mode-first), Medium (typography-focused, distraction-free reading).
+   - Touch targets minimum 44×44px. Navigation must work on 375px screens.
+   - If adding new sections or components, ensure they stack properly on mobile.
+7. NO DIRECTORY NAVIGATION: Do not use 'cd' or absolute paths.
+7. BRIEF SENTENCE BEFORE EACH FILE — MANDATORY: Write exactly 1 short sentence before every code block.
+   - Example: "Updating the navbar to add your new menu item:"
+   - NEVER place two code blocks back-to-back with no text between them.
 
 Format code blocks as \`\`\`javascript:path/to/file.js\`\`\`. If a command is needed, use a separate bash block.`;
 
@@ -409,7 +480,7 @@ const AIAssistant = forwardRef(({
       // Retry the fix request
       const fixResponse = await ClaudeService.getClaudeCompletion(
         context.conversation,
-        context.maxTokens || 20000,
+        context.maxTokens || 64000,
         context.timeout || 90000
       );
 
@@ -469,37 +540,24 @@ const AIAssistant = forwardRef(({
     }
   };
 
-  // Retry handler for interrupted responses
+  // Continue handler for interrupted/truncated responses
   const handleRetryInterrupted = async () => {
-    if (!lastUserMessageRef.current) return;
+    if (isLoading) return;
 
-    // Remove the interrupted message
-    setMessages(prev => prev.filter(msg => !msg.isInterrupted));
+    // Find the interrupted message to get its partial content
+    const interruptedMsg = messages.find(msg => msg.isInterrupted);
+    if (!interruptedMsg) return;
 
-    // Pop the last assistant message from conversation history (the incomplete one)
-    if (conversationHistory.current.length > 0 && 
-        conversationHistory.current[conversationHistory.current.length - 1].role === 'assistant') {
-      conversationHistory.current.pop();
-    }
+    // Clear the interrupted flag on the existing message
+    setMessages(prev => prev.map(msg =>
+      msg.isInterrupted ? { ...msg, isInterrupted: false } : msg
+    ));
 
-    // Pop the last user message too (we'll re-add it)
-    if (conversationHistory.current.length > 0 && 
-        conversationHistory.current[conversationHistory.current.length - 1].role === 'user') {
-      conversationHistory.current.pop();
-    }
+    // Send a continuation prompt with the tail of the partial response as context
+    const lastChunk = interruptedMsg.content.slice(-300);
+    const continuePrompt = `Your previous response was cut off due to length limits. Continue EXACTLY from where you left off. Here is the end of your last response for reference:\n\n...${lastChunk}\n\nContinue from there. Do NOT repeat anything already said.`;
 
-    // Remove the user message from UI too
-    setMessages(prev => {
-      const lastUserIdx = prev.findLastIndex(msg => msg.role === 'user');
-      if (lastUserIdx !== -1) {
-        return prev.slice(0, lastUserIdx);
-      }
-      return prev;
-    });
-
-    // Resend the message
-    const { text, images } = lastUserMessageRef.current;
-    await sendMessage(text, images);
+    await sendMessage(continuePrompt);
   };
 
   // Automatic Fix logic when a command fails
@@ -996,10 +1054,11 @@ It requires the backend server to communicate with Claude AI.`;
         console.log(' Stream successful, finalizing message...');
         console.log(' Response content length:', response.message?.length);
 
-        // Finalize the streaming message
+        // Finalize the streaming message - check if truncated
+        const wasTruncated = response.stopReason === 'max_tokens';
         setMessages(prev => prev.map(msg =>
           msg.id === streamingMessageId
-            ? { ...msg, content: response.message, isStreaming: false }
+            ? { ...msg, content: response.message, isStreaming: false, isInterrupted: wasTruncated }
             : msg
         ));
 
@@ -1014,12 +1073,12 @@ It requires the backend server to communicate with Claude AI.`;
         if (workspaceFolderRef.current) {
           setTimeout(async () => {
             try {
-              console.log(' AI response received - processing automatically...');
+              console.log('[AI Response Processing] Starting automatic file & command processing...');
               const codeBlocks = extractCodeBlocks(response.message);
               const commands = extractCommands(response.message);
 
-              console.log(` Found ${codeBlocks.length} code blocks to create`);
-              console.log(` Found ${commands.length} commands to execute`);
+              console.log(`[AI Response Processing] Found ${codeBlocks.length} code blocks to create`);
+              console.log(`[AI Response Processing] Found ${commands.length} commands to execute`);
 
               // STEP 1: Create files FIRST (so commands can use them)
               if (codeBlocks.length > 0) {
@@ -1202,6 +1261,10 @@ It requires the backend server to communicate with Claude AI.`;
         ? { ...msg, content: msg.content + '\n\n_[Operation stopped by user]_', isWorking: false }
         : msg
     ));
+
+    // Reset terminal busy state
+    setIsTerminalBusy(false);
+    setIsLoading(false);
   };
 
 
@@ -1458,7 +1521,7 @@ Could you provide more details about what you'd like to build?`;
       // Clean up the code - remove only leading/trailing empty lines, preserve internal structure
       const cleanCode = code.replace(/^\n+/, '').replace(/\n+$/, '');
 
-      console.log(' Found code block:', language, 'filename:', filename, 'code length:', cleanCode.length);
+      console.log('[File Extraction] Found code block:', language, 'filename:', filename, 'code length:', cleanCode.length);
 
       blocks.push({
         language: language,
@@ -1467,7 +1530,7 @@ Could you provide more details about what you'd like to build?`;
       });
     }
 
-    console.log(' extractCodeBlocks found:', blocks.length, 'total blocks');
+    console.log('[File Extraction] Total blocks found:', blocks.length);
     return blocks;
   };
 
@@ -1477,12 +1540,12 @@ Could you provide more details about what you'd like to build?`;
 
     // Match various command patterns
     const patterns = [
-      // Commands in bash/sh/terminal code blocks
+      // Commands in bash/sh/terminal code blocks — primary source, highest priority
       /```(?:bash|sh|shell|terminal|zsh)\n([\s\S]*?)```/gi,
-      // Commands with $ prefix
+      // Commands with $ prefix in plain text
       /\$\s+(npm|yarn|pnpm|node|python|pip|git|cd|mkdir|touch|rm|mv|cp)\s+[^\n]+/gi,
-      // Common commands in plain text (more strict)
-      /(?:^|\n)(npm (?:install|run|start|build|test)|yarn (?:install|add|start|build)|git (?:clone|init|add|commit|push|pull))[^\n]*/gi
+      // npm install / yarn install in plain text only (NOT npm run — already caught by bash block)
+      /(?:^|\n)(npm (?:install|i\b|start|build|test)|yarn (?:install|add|start|build)|git (?:clone|init|add|commit|push|pull))[^\n]*/gi
     ];
 
     patterns.forEach(pattern => {
@@ -1499,7 +1562,7 @@ Could you provide more details about what you'd like to build?`;
             .filter(line => line && !line.startsWith('#')); // Remove comments
           commands.push(...lines);
         } else {
-          commands.push(cmd);
+          if (!cmd.startsWith('#')) commands.push(cmd); // Skip comment lines
         }
       }
     });
@@ -1508,21 +1571,27 @@ Could you provide more details about what you'd like to build?`;
     const seen = new Set();
     const filtered = commands.filter(cmd => {
       if (!cmd || cmd.length < 3 || seen.has(cmd)) return false;
+      if (cmd.startsWith('#')) return false; // Skip shell comments
       seen.add(cmd);
       return true;
     });
 
-    debug(' extractCommands found:', filtered.length, 'commands:', filtered);
+    console.log('[Command Extraction] Found', filtered.length, 'commands:', filtered);
     return filtered;
   };
 
   // Execute terminal commands automatically with loading UI
   const executeCommandsAutomatically = async (messageContent) => {
     const commands = extractCommands(messageContent);
-    if (commands.length === 0) return;
+    console.log('[Command Auto-Execute] Commands to execute:', commands);
+    if (commands.length === 0) {
+      console.log('[Command Auto-Execute] No commands found in message');
+      return;
+    }
 
     // On Windows, check PowerShell execution policy once per session before running any commands
-    if (process.platform === 'win32' && !powershellPolicyChecked.current) {
+    const isWindows = navigator.platform.toLowerCase().includes('win') || navigator.userAgent.toLowerCase().includes('windows');
+    if (isWindows && !powershellPolicyChecked.current) {
       powershellPolicyChecked.current = true;
       try {
         const policyResult = await window.electronAPI.terminalExecute('powershell -Command "Get-ExecutionPolicy"', workspaceFolderRef.current);
@@ -1859,7 +1928,7 @@ Could you provide more details about what you'd like to build?`;
           {
             id: commandId,
             role: 'system',
-            content: `Executing Command:\n\n\`\`\`bash\n${cmdSpec.command}\n\`\`\`\n\n${cmdSpec.reason}\n\nWorking directory: \`${workspaceFolderRef.current}\``,
+            content: `${cmdSpec.reason} \`\`\`bash\n${cmdSpec.command}\n\`\`\``,
             isExecuting: true
           }
         ]);
@@ -2368,38 +2437,60 @@ Could you provide more details about what you'd like to build?`;
         </div>
       )}
       <div className="ai-messages" ref={messagesContainerRef}>
-        {messages
-          // Filter out duplicate messages with same content and role
-          .filter((msg, idx, arr) => {
-            // Keep first occurrence of each message
+        {(() => {
+          // Filter out duplicate messages
+          const uniqueMessages = messages.filter((msg, idx, arr) => {
             const firstIdx = arr.findIndex(m =>
               m.role === msg.role &&
               m.content === msg.content
             );
             return firstIdx === idx;
-          })
-          .map((msg, idx) => {
-            const codeBlocks = extractCodeBlocks(msg.content);
-            const hasCode = codeBlocks.length > 0;
+          });
 
-            // Determine message class based on state
-            let messageClass = `ai-message ${msg.role}`;
-            if (msg.isStreaming) messageClass += ' streaming';
-            if (msg.isExecuting) messageClass += ' executing';
-            if (msg.isError) messageClass += ' error';
+          // Group consecutive system messages together
+          const messageGroups = [];
+          let currentSystemGroup = [];
 
-            // Use message ID as key if available, otherwise fallback to index
-            const messageKey = msg.id || `msg-${idx}`;
+          uniqueMessages.forEach((msg, idx) => {
+            if (msg.role === 'system') {
+              currentSystemGroup.push(msg);
+            } else {
+              // Non-system message - flush any pending system group first
+              if (currentSystemGroup.length > 0) {
+                messageGroups.push({ type: 'system-group', messages: currentSystemGroup });
+                currentSystemGroup = [];
+              }
+              messageGroups.push({ type: 'single', message: msg });
+            }
+          });
 
-            return (
-              <div
-                key={messageKey}
-                className={messageClass}
-                data-command-status={msg.commandStatus || ''}
-                data-scanning={msg.isScanning ? 'true' : 'false'}
-                data-working={msg.isWorking ? 'true' : 'false'}
-              >
-                <div className="message-content" data-working={msg.isWorking ? 'true' : 'false'}>
+          // Flush any remaining system messages
+          if (currentSystemGroup.length > 0) {
+            messageGroups.push({ type: 'system-group', messages: currentSystemGroup });
+          }
+
+          // Render message groups
+          return messageGroups.map((group, groupIdx) => {
+            if (group.type === 'system-group') {
+              // Render system message group with shared container
+              return (
+                <div key={`system-group-${groupIdx}`} className="system-message-group">
+                  {group.messages.map((msg, idx) => {
+                    const messageKey = msg.id || `msg-${groupIdx}-${idx}`;
+                    let messageClass = `ai-message ${msg.role}`;
+                    if (msg.isStreaming) messageClass += ' streaming';
+                    if (msg.isExecuting) messageClass += ' executing';
+                    if (msg.isError) messageClass += ' error';
+
+                    return (
+                      <div
+                        key={messageKey}
+                        className={messageClass}
+                        data-command-status={msg.commandStatus || ''}
+                        data-scanning={msg.isScanning ? 'true' : 'false'}
+                        data-working={msg.isWorking ? 'true' : 'false'}
+                      >
+                        <div className="message-content" data-working={msg.isWorking ? 'true' : 'false'}>
                   {(() => {
                     let fileBlockIndex = 0; // Track file blocks separately
 
@@ -2463,52 +2554,43 @@ Could you provide more details about what you'd like to build?`;
 
                         // ALL code blocks (commands and files) - show only header, never code content
                         if (isCommand) {
-                          // Command blocks - show command text in header only
-                          const commandText = (code || part).trim().split('\n')[0]; // Get first line
-                          const truncatedCommand = commandText.length > 40 ? commandText.substring(0, 40) + '...' : commandText;
+                          // Command blocks - same pill style as file blocks but grey
+                          const commandText = (code || part).trim().split('\n')[0];
+                          const truncatedCommand = commandText.length > 50 ? commandText.substring(0, 50) + '...' : commandText;
 
                           return (
-                            <div key={i} className="code-block-container collapsed">
-                              <div className="code-block-header" style={{ cursor: 'default' }}>
-                                <div className="code-header-left">
-                                  <span className="code-filename command-text">{truncatedCommand}</span>
-                                  <span className="code-language">{language.toUpperCase()}</span>
-                                </div>
-                              </div>
-                            </div>
+                            <span key={i} className="code-block-container collapsed command-block">
+                              <span className="code-block-header" style={{ cursor: 'default' }}>
+                                <span className="code-filename command-text">{truncatedCommand}</span>
+                              </span>
+                            </span>
                           );
                         } else {
-                          // File blocks - always show only header (no code content ever shown)
+                          // File blocks - pill-sized inline badges
                           return (
-                            <div key={i} className="code-block-container collapsed">
-                              <div className="code-block-header" style={{ cursor: 'default' }}>
-                                <div className="code-header-left">
-                                  {displayFilename && (
+                            <span key={i} className="code-block-container collapsed file-block">
+                              <span className="code-block-header" style={{ cursor: 'default' }}>
+                                {displayFilename && (
+                                  <>
+                                    {getFileIcon(displayFilename)}
                                     <span className="code-filename">{displayFilename}</span>
-                                  )}
-                                  <span className="code-language">{language.toUpperCase()}</span>
-                                </div>
-                                <div className="code-header-right">
-                                  {blockStatus === 'creating' && (
-                                    <span className="code-status creating">
-                                      <FiLoader className="spinning" size={12} />
-                                      Creating...
-                                    </span>
-                                  )}
-                                  {blockStatus === 'created' && (
-                                    <span className="code-status created">
-                                      <FiCheck size={12} />
-                                      Created
-                                    </span>
-                                  )}
-                                  {blockStatus === 'failed' && (
-                                    <span className="code-status failed">
-                                      Failed
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
+                                  </>
+                                )}
+                                {blockStatus === 'creating' && (
+                                  <span className="code-status creating">
+                                    <FiLoader className="spinning" size={10} />
+                                  </span>
+                                )}
+                                {blockStatus === 'created' && (
+                                  <span className="code-status created">
+                                    <FiCheck size={10} />
+                                  </span>
+                                )}
+                                {blockStatus === 'failed' && (
+                                  <span className="code-status failed">!</span>
+                                )}
+                              </span>
+                            </span>
                           );
                         }
                       }
@@ -2662,7 +2744,7 @@ Could you provide more details about what you'd like to build?`;
                 {/* Interrupted response indicator */}
                 {msg.isInterrupted && (
                   <div className="interrupted-indicator">
-                    <span className="interrupted-text">Response interrupted</span>
+                    <span className="interrupted-text">Response was cut off — there may be remaining code or instructions</span>
                     <button
                       className="interrupted-retry-btn"
                       onClick={handleRetryInterrupted}
@@ -2674,9 +2756,301 @@ Could you provide more details about what you'd like to build?`;
                 )}
 
 
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            } else {
+              // Render single message (user/assistant)
+              const msg = group.message;
+              const codeBlocks = extractCodeBlocks(msg.content);
+              const hasCode = codeBlocks.length > 0;
+              const messageKey = msg.id || `msg-${groupIdx}`;
+              let messageClass = `ai-message ${msg.role}`;
+              if (msg.isStreaming) messageClass += ' streaming';
+              if (msg.isExecuting) messageClass += ' executing';
+              if (msg.isError) messageClass += ' error';
+
+              return (
+                <div
+                  key={messageKey}
+                  className={messageClass}
+                  data-command-status={msg.commandStatus || ''}
+                  data-scanning={msg.isScanning ? 'true' : 'false'}
+                  data-working={msg.isWorking ? 'true' : 'false'}
+                >
+                  <div className="message-content" data-working={msg.isWorking ? 'true' : 'false'}>
+                    {(() => {
+                      let fileBlockIndex = 0; // Track file blocks separately
+
+                      // Helper to process bold text within a string
+                      const processBoldText = (text, i, partIdx, lastIdx) => {
+                        let boldIndex = 0;
+                        const boldParts = [];
+                        const boldRegexLocal = /\*\*(.+?)\*\*/g;
+                        let match;
+
+                        while ((match = boldRegexLocal.exec(text)) !== null) {
+                          if (match.index > boldIndex) {
+                            boldParts.push(text.substring(boldIndex, match.index));
+                          }
+                          boldParts.push(<strong key={`bold-${i}-${partIdx}-${lastIdx}-${match.index}`}>{match[1]}</strong>);
+                          boldIndex = match.index + match[0].length;
+                        }
+
+                        if (boldIndex < text.length) {
+                          boldParts.push(text.substring(boldIndex));
+                        }
+
+                        return boldParts.length > 0 ? boldParts : text;
+                      };
+
+                      return msg.content.split('```').map((part, i) => {
+                        if (i % 2 === 1) {
+                          // Extract language and filename from first line
+                          const lines = part.split('\n');
+                          const firstLine = lines[0].trim();
+                          const code = lines.slice(1).join('\n');
+
+                          // Extract language and filename
+                          let language = 'code';
+                          let displayFilename = null;
+                          let blockState = null;
+                          let blockStatus = null;
+                          let blockId = null;
+
+                          // Extract language from first line
+                          const langMatch = firstLine.split(/\s+/)[0];
+                          if (langMatch) {
+                            language = langMatch;
+                          }
+
+                          // Check for filename= in the first line
+                          if (firstLine.includes('filename=')) {
+                            // Extract filename value
+                            const filenameMatch = firstLine.match(/filename=([^\s]+)/);
+                            if (filenameMatch) {
+                              displayFilename = filenameMatch[1];
+                              blockId = `${messageKey}-block-${fileBlockIndex}`;
+                              blockState = blockId ? codeBlockStates[blockId] : null;
+                              blockStatus = blockState?.status;
+                              fileBlockIndex++;
+                            }
+                          }
+
+                          // Determine if this is a command block based on language
+                          const isCommand = ['bash', 'sh', 'shell', 'zsh', 'fish', 'powershell', 'cmd', 'terminal'].includes(language.toLowerCase());
+
+                          // ALL code blocks (commands and files) - show only header, never code content
+                          if (isCommand) {
+                            // Command blocks - same pill style as file blocks but grey
+                            const commandText = (code || part).trim().split('\n')[0];
+                            const truncatedCommand = commandText.length > 50 ? commandText.substring(0, 50) + '...' : commandText;
+
+                            return (
+                              <span key={i} className="code-block-container collapsed command-block">
+                                <span className="code-block-header" style={{ cursor: 'default' }}>
+                                  <span className="code-filename command-text">{truncatedCommand}</span>
+                                </span>
+                              </span>
+                            );
+                          } else {
+                            // File blocks - pill-sized inline badges
+                            return (
+                              <span key={i} className="code-block-container collapsed file-block">
+                                <span className="code-block-header" style={{ cursor: 'default' }}>
+                                  {displayFilename && (
+                                    <>
+                                      {getFileIcon(displayFilename)}
+                                      <span className="code-filename">{displayFilename}</span>
+                                    </>
+                                  )}
+                                  {blockStatus === 'creating' && (
+                                    <span className="code-status creating">
+                                      <FiLoader className="spinning" size={10} />
+                                    </span>
+                                  )}
+                                  {blockStatus === 'created' && (
+                                    <span className="code-status created">
+                                      <FiCheck size={10} />
+                                    </span>
+                                  )}
+                                  {blockStatus === 'failed' && (
+                                    <span className="code-status failed">!</span>
+                                  )}
+                                </span>
+                              </span>
+                            );
+                          }
+                        }
+
+                        // TEXT CONTENT - Use sanitizer to strip all code
+                        const sanitizedText = sanitizeTextContent(part);
+                        if (!sanitizedText) return null;
+
+                        // Render sanitized text with markdown support
+                        return sanitizedText.split('\n').map((line, j) => {
+                          if (!line.trim()) return null;
+
+                          // Handle headers
+                          if (line.startsWith('### ')) {
+                            return <h3 key={`${i}-${j}`} style={{ fontSize: '1.1em', fontWeight: 'bold', marginTop: '1em', marginBottom: '0.5em' }}>{line.substring(4)}</h3>;
+                          }
+                          if (line.startsWith('## ')) {
+                            return <h2 key={`${i}-${j}`} style={{ fontSize: '1.3em', fontWeight: 'bold', marginTop: '1.2em', marginBottom: '0.6em', borderBottom: '1px solid #3a3a3a', paddingBottom: '0.3em' }}>{line.substring(3)}</h2>;
+                          }
+                          if (line.startsWith('# ')) {
+                            return <h1 key={`${i}-${j}`} style={{ fontSize: '1.5em', fontWeight: 'bold', marginTop: '1.5em', marginBottom: '0.7em' }}>{line.substring(2)}</h1>;
+                          }
+
+                          // Handle lists
+                          if (line.match(/^\d+\.\s/)) {
+                            return <li key={`${i}-${j}`} style={{ marginLeft: '1.5em', marginBottom: '0.3em' }}>{line.replace(/^\d+\.\s/, '')}</li>;
+                          }
+                          if (line.startsWith('- ') || line.startsWith('* ')) {
+                            return <li key={`${i}-${j}`} style={{ marginLeft: '1.5em', marginBottom: '0.3em', listStyleType: 'disc' }}>{line.substring(2)}</li>;
+                          }
+
+                          // Handle horizontal rule
+                          if (line.trim() === '---' || line.trim() === '***') {
+                            return <hr key={`${i}-${j}`} style={{ border: 'none', borderTop: '1px solid #3a3a3a', margin: '1.5em 0' }} />;
+                          }
+
+                          // Handle bold and inline code
+                          const boldRegex = /\*\*(.+?)\*\*/g;
+                          const inlineCodeRegex = /`([^`]+)`/g;
+                          const parts = [];
+                          let match;
+
+                          // Process inline code first
+                          const tempParts = [];
+                          let tempIndex = 0;
+                          while ((match = inlineCodeRegex.exec(line)) !== null) {
+                            if (match.index > tempIndex) {
+                              tempParts.push(line.substring(tempIndex, match.index));
+                            }
+                            // Only show inline code if it's short (like a filename or command)
+                            const codeContent = match[1];
+                            if (codeContent.length < 50 && !codeContent.includes('\n')) {
+                              tempParts.push({ type: 'code', content: codeContent });
+                            }
+                            tempIndex = match.index + match[0].length;
+                          }
+                          if (tempIndex < line.length) {
+                            tempParts.push(line.substring(tempIndex));
+                          }
+
+                          // Then handle links, bold and inline code
+                          tempParts.forEach((part, partIdx) => {
+                            if (typeof part === 'object' && part.type === 'code') {
+                              parts.push(<code key={`code-${j}-${partIdx}`} style={{
+                                background: 'rgba(255,255,255,0.1)',
+                                padding: '2px 6px',
+                                borderRadius: '3px',
+                                fontFamily: 'monospace',
+                                fontSize: '0.9em'
+                              }}>{part.content}</code>);
+                            } else if (typeof part === 'string') {
+                              // Handle links [text](url)
+                              const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+                              let lastIndex = 0;
+                              let linkMatch;
+
+                              while ((linkMatch = linkRegex.exec(part)) !== null) {
+                                // Text before link
+                                if (linkMatch.index > lastIndex) {
+                                  parts.push(processBoldText(part.substring(lastIndex, linkMatch.index), j, partIdx, lastIndex));
+                                }
+
+                                // The link itself
+                                const linkText = linkMatch[1];
+                                const linkUrl = linkMatch[2];
+
+                                if (linkUrl === '#upgrade') {
+                                  parts.push(
+                                    <button
+                                      key={`link-${j}-${linkMatch.index}`}
+                                      className="upgrade-link-btn"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        if (onUpgradeClick) onUpgradeClick();
+                                      }}
+                                    >
+                                      {linkText}
+                                    </button>
+                                  );
+                                } else {
+                                  parts.push(
+                                    <a
+                                      key={`link-${j}-${linkMatch.index}`}
+                                      href={linkUrl}
+                                      onClick={(e) => {
+                                        if (linkUrl.startsWith('#')) e.preventDefault();
+                                      }}
+                                    >
+                                      {linkText}
+                                    </a>
+                                  );
+                                }
+
+                                lastIndex = linkMatch.index + linkMatch[0].length;
+                              }
+
+                              // Remaining text after last link
+                              if (lastIndex < part.length) {
+                                parts.push(processBoldText(part.substring(lastIndex), j, partIdx, lastIndex));
+                              } else if (lastIndex === 0) {
+                                // No links found
+                                parts.push(processBoldText(part, j, partIdx, 0));
+                              }
+                            }
+                          });
+
+                          if (parts.length === 0) {
+                            parts.push(line);
+                          }
+
+                          return <p key={`${i}-${j}`}>{parts}</p>;
+                        });
+                      });
+                    })()}
+                  </div>
+
+                  {/* Retry button for failed auto-fix */}
+                  {msg.isRetryError && msg.retryContext && (
+                    <div className="retry-button-container">
+                      <button
+                        className="retry-button"
+                        onClick={() => handleRetryAutoFix(msg.retryContext)}
+                        disabled={isLoading}
+                      >
+                        <FiLoader className={isLoading ? 'spinning' : ''} size={16} />
+                        {isLoading ? 'Retrying...' : 'Retry Auto-Fix'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Interrupted response indicator */}
+                  {msg.isInterrupted && (
+                    <div className="interrupted-indicator">
+                      <span className="interrupted-text">Response interrupted</span>
+                      <button
+                        className="interrupted-retry-btn"
+                        onClick={handleRetryInterrupted}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? 'Continuing...' : 'Continue'}
+                    </button>
+                  </div>
+                )}
+
+
               </div>
             );
-          })}
+          }
+        });
+        })()}
         <div ref={messagesEndRef} />
       </div>
       <form
@@ -2732,92 +3106,89 @@ Could you provide more details about what you'd like to build?`;
           </div>
         )}
 
-        <div className={`ai-input-container ${isTerminalBusy ? 'terminal-busy' : ''} ${isDraggingOver ? 'drag-active' : ''}`}>
-          {/* Dev server URL bar */}
-          {devServerUrl && (
-            <div className="dev-server-bar" onClick={() => { window.electronAPI?.openExternal?.(devServerUrl) || window.open(devServerUrl, '_blank'); }}>
-              <span className="dev-server-dot"></span>
-              <span>Click to open</span>
-              <span className="dev-server-url">{devServerUrl}</span>
-            </div>
-          )}
-          <div className="ai-input-glow"></div>
-          {/* Drag overlay with cancel button */}
-          {isDraggingOver && (
-            <div className="drag-overlay">
-              <div className="drag-overlay-content">
-                <span>Drop image here...</span>
-                <button
-                  type="button"
-                  className="drag-cancel-btn"
-                  onClick={() => setIsDraggingOver(false)}
-                  title="Cancel"
-                >
-                  <FiX size={14} />
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="ai-input-inner">
-            <div className="ai-input-textarea-wrap">
-              <textarea
-                className="ai-input"
-                placeholder={isTerminalBusy ? "Terminal active - Waiting to complete..." : "What would you like to build today?"}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  // Submit on Enter, add newline on Shift+Enter
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit(e);
-                  }
-                }}
-                disabled={isLoading || isTerminalBusy}
-                rows={3}
-              />
-              {input.trim() && (
-                <button
-                  type="button"
-                  className="ai-input-clear"
-                  onClick={() => setInput('')}
-                  title="Clear input"
-                >
-                  <FiX size={14} />
-                </button>
-              )}
-            </div>
-            <div className="ai-input-actions">
-              <div className="input-hint">
-                <kbd>Enter</kbd> to send  <kbd>Shift+Enter</kbd> for new line
-              </div>
-
+        {/* Dev server URL bar */}
+        {devServerUrl && (
+          <div className="dev-server-bar" onClick={() => { window.electronAPI?.openExternal?.(devServerUrl) || window.open(devServerUrl, '_blank'); }}>
+            <span className="dev-server-dot"></span>
+            <span>Click to open</span>
+            <span className="dev-server-url">{devServerUrl}</span>
+          </div>
+        )}
+        {/* Drag overlay with cancel button */}
+        {isDraggingOver && (
+          <div className="drag-overlay">
+            <div className="drag-overlay-content">
+              <span>Drop image here...</span>
               <button
-                type="submit"
-                className="ai-send"
-                disabled={!input.trim() || isLoading || isTerminalBusy}
-                title={isTerminalBusy ? "Terminal is busy..." : (isLoading ? "AI is working..." : "Send message")}
+                type="button"
+                className="drag-cancel-btn"
+                onClick={() => setIsDraggingOver(false)}
+                title="Cancel"
               >
-                {isLoading || isTerminalBusy ? (
-                  <FiLoader className="spinning" size={18} />
-                ) : (
-                  <>
-                    <FiSend size={16} />
-                    <span>Send</span>
-                  </>
-                )}
+                <FiX size={14} />
               </button>
-              {isLoading && (
-                <button
-                  type="button"
-                  className="ai-cancel"
-                  onClick={handleStopGeneration}
-                  title="Cancel generation"
-                >
-                  <FiX size={14} />
-                  <span>Cancel</span>
-                </button>
-              )}
             </div>
+          </div>
+        )}
+        <div className="ai-input-inner">
+          <div className="ai-input-textarea-wrap">
+            <textarea
+              className="ai-input"
+              placeholder={isTerminalBusy ? "Terminal active - Waiting to complete..." : "What would you like to build today?"}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                // Submit on Enter, add newline on Shift+Enter
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
+              disabled={isLoading || isTerminalBusy}
+              rows={3}
+            />
+            {input.trim() && (
+              <button
+                type="button"
+                className="ai-input-clear"
+                onClick={() => setInput('')}
+                title="Clear input"
+              >
+                <FiX size={14} />
+              </button>
+            )}
+          </div>
+          <div className="ai-input-actions">
+            <div className="input-hint">
+              <kbd>Enter</kbd> to send  <kbd>Shift+Enter</kbd> for new line
+            </div>
+
+            <button
+              type="submit"
+              className="ai-send"
+              disabled={!input.trim() || isLoading || isTerminalBusy}
+              title={isTerminalBusy ? "Terminal is busy..." : (isLoading ? "AI is working..." : "Send message")}
+            >
+              {isLoading || isTerminalBusy ? (
+                <FiLoader className="spinning" size={18} />
+              ) : (
+                <>
+                  <FiSend size={16} />
+                  <span>Send</span>
+                </>
+              )}
+            </button>
+            {isLoading && (
+              <button
+                type="button"
+                className="ai-cancel"
+                onClick={handleStopGeneration}
+                title="Cancel generation"
+              >
+                <FiX size={14} />
+                <span>Cancel</span>
+              </button>
+            )}
           </div>
         </div>
       </form>

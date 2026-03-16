@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const admin = require('firebase-admin');
 
 const claudeRoutes = require('./routes/claude');
+const openaiRoutes = require('./routes/openai');
 
 const app = express();
 
@@ -79,6 +80,7 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/claude', claudeRoutes);
+app.use('/api/openai', openaiRoutes);
 app.use('/api/payment', require('./routes/payment'));
 // Note: Publish functionality moved to Firebase Functions
 

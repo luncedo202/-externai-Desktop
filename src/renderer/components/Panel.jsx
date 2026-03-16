@@ -19,6 +19,7 @@ const Panel = forwardRef(({
   theme,
   onUpdateTerminalStatus,
   onTerminalOutput,
+  onDevServerDetected,
   terminalRef,
   visible
 }, ref) => {
@@ -269,12 +270,33 @@ const Panel = forwardRef(({
             if (onTerminalOutput) {
               onTerminalOutput(terminalId, data, terminalOutputBuffers.current[terminalId]);
             }
-            
+
+            // Detect dev server URLs from terminal output
+            if (onDevServerDetected) {
+              const urlPatterns = [
+                /(?:Local|➜\s+Local):\s+(https?:\/\/[^\s]+)/i,
+                /(?:running on|listening on|server running at|Application started at):\s+(https?:\/\/[^\s]+)/i,
+                /https?:\/\/localhost:\d+/i,
+                /http:\/\/127\.0\.0\.1:\d+/i,
+              ];
+              const cleanData = data.replace(/\x1b\[[0-9;]*m/g, '');
+              for (const pattern of urlPatterns) {
+                const match = cleanData.match(pattern);
+                if (match) {
+                  const detectedUrl = (match[1] || match[0]).trim();
+                  onDevServerDetected(detectedUrl);
+                  break;
+                }
+              }
+            }
+
             // Detect command completion status for terminal tab indicators
             if (onUpdateTerminalStatus) {
               // Check for common error patterns
-              const hasError = /error|Error|ERROR|failed|Failed|FAILED|npm ERR!|ENOENT|EACCES|command not found/.test(data);
-              const hasSuccess = /✓|success|Success|SUCCESS|Done|Compiled successfully|webpack compiled|Ready in|Server running/.test(data);
+              const hasError = /error|Error|ERROR|failed|Failed|FAILED|npm ERR!|ENOENT|EACCES/.test(data)
+                || (/command not found/.test(data) && !/command not found: #/.test(data)); // Ignore harmless comment artifacts
+              const hasSuccess = /✓|success|Success|SUCCESS|Done|done|Compiled successfully|webpack compiled|Ready in|Server running|added \d+ packages|packages in \d|updated \d+ packages|audited \d+ packages|found \d+ vulnerabilities|successfully|installed|complete|finished/.test(data)
+                || /[$%#]\s*$/.test(data.trimEnd()); // Shell prompt returned = command finished
               
               if (hasError) {
                 onUpdateTerminalStatus(terminalId, 'error');
@@ -285,8 +307,8 @@ const Panel = forwardRef(({
                 const command = lastCommands.current[terminalId];
                 const timeSinceCommand = Date.now() - (commandStartTime.current[terminalId] || 0);
                 
-                // Only explain if we have a recent command (within last 30 seconds) and haven't already explained it
-                if (command && timeSinceCommand < 30000 && !commandExplained.current[terminalId]) {
+                // Only explain if we have a recent command (within last 2 minutes) and haven't already explained it
+                if (command && timeSinceCommand < 120000 && !commandExplained.current[terminalId]) {
                   commandExplained.current[terminalId] = true; // Mark as explained immediately to prevent duplicates
                   console.log('[Panel] Generating explanation for:', command);
                   setLoadingExplanation(prev => ({ ...prev, [terminalId]: true }));

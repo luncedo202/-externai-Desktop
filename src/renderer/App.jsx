@@ -566,6 +566,7 @@ function App() {
               onClearDiagnostics={() => setDiagnostics([])}
               onClearDebug={() => setDebugLogs([])}
               theme={theme}
+              onDevServerDetected={handleDevServerDetected}
             />
           )}
         </div>

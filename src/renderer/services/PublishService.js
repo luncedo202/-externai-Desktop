@@ -33,7 +33,10 @@ class PublishService {
     try {
       onProgress({ status: 'preparing', message: 'Preparing project for publishing...' });
 
-      // First, detect if there's a build folder
+      // First, try to build if there's a build script
+      await this.buildIfNeeded(workspaceFolder, onProgress);
+
+      // Detect if there's a build folder
       const buildInfo = await this.detectBuildOutput(workspaceFolder);
       
       // Determine which folder to publish
@@ -116,6 +119,42 @@ class PublishService {
         success: false,
         error: errorMessage
       };
+    }
+  }
+
+  /**
+   * Run npm run build if the project has a build script and no build output yet
+   */
+  async buildIfNeeded(workspaceFolder, onProgress) {
+    try {
+      // Check if there's already a build output
+      const existingBuild = await this.detectBuildOutput(workspaceFolder);
+      if (existingBuild.buildPath) return; // Already built
+
+      // Check if package.json has a build script
+      const pkgResult = await window.electronAPI.fs.readFile(`${workspaceFolder}/package.json`);
+      if (!pkgResult.success) return;
+
+      const pkg = JSON.parse(pkgResult.content);
+      if (!pkg.scripts?.build) return;
+
+      onProgress({ status: 'preparing', message: 'Building project...' });
+
+      // Install deps first if node_modules doesn't exist
+      const nmResult = await window.electronAPI.fs.readDir(`${workspaceFolder}/node_modules`);
+      if (!nmResult.success || !nmResult.items?.length) {
+        onProgress({ status: 'preparing', message: 'Installing dependencies...' });
+        await window.electronAPI.process.run('npm install', workspaceFolder);
+      }
+
+      // Run the build
+      const buildResult = await window.electronAPI.process.run('npm run build', workspaceFolder);
+      if (!buildResult.success) {
+        console.warn('Build failed:', buildResult.stderr);
+        // Don't block publishing — will fall back to raw files
+      }
+    } catch (e) {
+      console.warn('Build step skipped:', e.message);
     }
   }
 
